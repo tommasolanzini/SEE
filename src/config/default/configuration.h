@@ -109,7 +109,7 @@ extern "C" {
 /* CDC Transfer Queue Size for both read and
    write. Applicable to all instances of the
    function driver */
-#define USB_DEVICE_CDC_QUEUE_DEPTH_COMBINED                 6144U
+#define USB_DEVICE_CDC_QUEUE_DEPTH_COMBINED                 9216U
 
 /*** USB Driver Configuration ***/
 

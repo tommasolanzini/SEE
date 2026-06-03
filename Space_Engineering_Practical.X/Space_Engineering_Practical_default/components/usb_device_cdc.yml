@@ -46,7 +46,7 @@ data:
       - children:
         - attributes:
             id: usb_device_cdc
-            value: '21495'
+            value: '29695'
           type: Dynamic
         type: Values
       type: Integer
