@@ -399,15 +399,15 @@ void APP_Tasks ( void )
 
                 /* Schedule a read on COM1 and COM2 */
                 appData.appCOMPortObjects[COM1].isReadComplete = false;
-                appData.appCOMPortObjects[COM2].isReadComplete = false;
+                /*appData.appCOMPortObjects[COM2].isReadComplete = false;*/
 
                 USB_DEVICE_CDC_Read(COM1,
                         &appData.appCOMPortObjects[COM1].readTransferHandle,
                         com1ReadBuffer, APP_READ_BUFFER_SIZE);
 
-                USB_DEVICE_CDC_Read(COM2,
+                /*USB_DEVICE_CDC_Read(COM2,
                         &appData.appCOMPortObjects[COM2].readTransferHandle,
-                        com2ReadBuffer, APP_READ_BUFFER_SIZE);
+                        com2ReadBuffer, APP_READ_BUFFER_SIZE);*/
 
             }
             break;
@@ -443,9 +443,9 @@ void APP_Tasks ( void )
 
             }
 
-            if(appData.appCOMPortObjects[COM2].isReadComplete == true)
+            /*if(appData.appCOMPortObjects[COM2].isReadComplete == true)
             {
-                /* This means we got data on COM2. Write this data to COM1 */
+                // This means we got data on COM2. Write this data to COM1
 
                 appData.appCOMPortObjects[COM2].isReadComplete = false;
                 appData.appCOMPortObjects[COM2].isWriteComplete = false;
@@ -455,7 +455,7 @@ void APP_Tasks ( void )
                         com2ReadBuffer, appData.appCOMPortObjects[COM2].readDataLength,
                         USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE);
 
-            }
+            }*/
             appData.state = APP_STATE_CHECK_FOR_WRITE_COMPLETE;
             break;
 
@@ -474,7 +474,7 @@ void APP_Tasks ( void )
 
             }
 
-            if(appData.appCOMPortObjects[COM2].isWriteComplete)
+            /*if(appData.appCOMPortObjects[COM2].isWriteComplete)
             {
                 USB_DEVICE_CDC_Read(COM2,
                         &appData.appCOMPortObjects[COM2].readTransferHandle,
@@ -483,7 +483,7 @@ void APP_Tasks ( void )
                 appData.appCOMPortObjects[COM2].isReadComplete = false;
                 appData.appCOMPortObjects[COM2].isWriteComplete = false;
 
-            }
+            }*/
 
             appData.state = APP_STATE_CHECK_IF_CONFIGURED;
             break;

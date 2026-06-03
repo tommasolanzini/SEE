@@ -14,11 +14,9 @@
  */
 
 #include <algorithm>
-#include <array>
 #include <cassert>
 #include <cstdint>
 #include <cstdio>
-#include <map>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -176,15 +174,16 @@ uint64_t poly_div_gf2_u64(uint64_t dividend, uint64_t divisor) {
 // =============================================================================
 
 int generate_gf_tables(int m, int prim_poly = -1) {
-    static const std::map<int,int> standard_polys = {
-        {3, 0b1011}, {4, 0x13}, {5, 0b100101},
-        {8, 0x11D }, {13, 0x201B}, {16, 0x1100B},
-    };
     if (prim_poly == -1) {
-        auto it = standard_polys.find(m);
-        if (it == standard_polys.end())
-            throw std::invalid_argument("No primitive polynomial for m=" + std::to_string(m));
-        prim_poly = it->second;
+        switch(m) {
+            case 3:  prim_poly = 0b1011; break;
+            case 4:  prim_poly = 0x13; break;
+            case 5:  prim_poly = 0b100101; break;
+            case 8:  prim_poly = 0x11D; break;
+            case 13: prim_poly = 0x201B; break;
+            case 16: prim_poly = 0x1100B; break;
+            default: throw std::invalid_argument("No primitive polynomial for m=" + std::to_string(m));
+        }
     }
     int field_size = 1 << m;
     gf_n           = field_size - 1;
@@ -206,17 +205,18 @@ int generate_gf_tables(int m, int prim_poly = -1) {
 // =============================================================================
 
 uint64_t get_g_polynomial(int m, int t = 2) {
-    static const std::map<int, std::array<uint64_t,2>> min_polys = {
-        {3,  {0b1011,   0b1101  }},
-        {4,  {0b10011,  0b11111 }},
-        {5,  {0b100101, 0b111101}},
-        {13, {0x201B,   0x26B1  }},
-    };
-    auto it = min_polys.find(m);
-    if (it == min_polys.end())
-        throw std::invalid_argument("No data for m=" + std::to_string(m));
-    if (t == 1) return it->second[0];
-    if (t == 2) return poly_mult_gf2(it->second[0], it->second[1]);
+    uint64_t p1 = 0, p2 = 0;
+    switch(m) {
+        case 3:  p1 = 0b1011;   p2 = 0b1101;   break;
+        case 4:  p1 = 0b10011;  p2 = 0b11111;  break;
+        case 5:  p1 = 0b100101; p2 = 0b111101; break;
+        case 13: p1 = 0x201B;   p2 = 0x26B1;   break;
+        default: throw std::invalid_argument("No data for m=" + std::to_string(m));
+    }
+    
+    if (t == 1) return p1;
+    if (t == 2) return poly_mult_gf2(p1, p2);
+    
     throw std::invalid_argument("Only t=1 or t=2 supported.");
 }
 
