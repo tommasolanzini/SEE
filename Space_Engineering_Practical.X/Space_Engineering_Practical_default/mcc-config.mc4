@@ -25,9 +25,9 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\ATSAMV71Q21B.ld
   hash: 0685903c7026c68a5d857ac6258bed5bd6e7748f91c87fdf878c5ecf8a8dccf6
 - file: ..\src\config\default\configuration.h
-  hash: cca3a063d8c9e6f2389de124114128ff331aecbb5b8d3b5e9e5a8dfeb586f9d0
+  hash: 86fca292086867c880c05a029d4c0783320719483d176596f3a8f463d58b0a8e
 - file: ..\src\config\default\definitions.h
-  hash: 0b0969bdb36c0ef9e06d71d98c571baed4443c714a81a2685de5a09e90289e7d
+  hash: a8f4ca36f99d3bc82c6ebc4c3fabeb4e4d644912792d78ad96f09de31cd81e39
 - file: ..\src\config\default\device.h
   hash: 47f474a3b4b9ec65802211dc057e933edfd7d641d1136f1b0cfde28dcd8725e0
 - file: ..\src\config\default\device_cache.h
@@ -163,7 +163,7 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\usb\usb_hub.h
   hash: 66a9362619640002d6c8fe6335e044dd7c9cd4fe834d1b2487aa172a08af644b
 - file: ..\src\config\default\usb_device_init_data.c
-  hash: 68e9ae1c5de57175fb7dab60a88dd8f25bc7edd627abf4cd6642b341f8cbff7b
+  hash: 92ae13590a5962f2e7266ccf5a449c758f768d80ed9f40448aea8d531d934d07
 - file: ..\src\config\default\user.h
   hash: 451e0878e9fcf6cf9fab046c1452ea662757988346c7f39e6bc98478ca25f995
 - file: ..\src\main.c

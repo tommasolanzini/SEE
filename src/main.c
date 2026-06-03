@@ -27,8 +27,7 @@
   Company:
     Microchip Technology Inc.
 
-  File Name:
-    main.c
+volatile uint8_t TARGET_BIT_FLIPS = 0; 
 
   Summary:
     This file contains the "main" function for a project.
