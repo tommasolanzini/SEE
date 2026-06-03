@@ -1,6 +1,6 @@
 import serial
 import time
-import random
+import random 
 
 # --- Configuration ---
 # Use the raw string prefix r'\\.\' to bypass the Windows registry bug for COM ports
