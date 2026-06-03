@@ -35,7 +35,7 @@ data:
       - children:
         - attributes:
             id: usb_device
-            value: 'false'
+            value: 'true'
           type: Dynamic
         type: Values
       type: Boolean
@@ -46,7 +46,7 @@ data:
       - children:
         - attributes:
             id: usb_device
-            value: '1'
+            value: '2'
           type: Dynamic
         type: Values
       type: Integer
@@ -57,7 +57,7 @@ data:
       - children:
         - attributes:
             id: usb_device
-            value: '67'
+            value: '141'
           type: Dynamic
         type: Values
       type: Integer
@@ -68,7 +68,7 @@ data:
       - children:
         - attributes:
             id: usb_device
-            value: '2'
+            value: '4'
           type: Dynamic
         type: Values
       type: Integer
@@ -79,7 +79,7 @@ data:
       - children:
         - attributes:
             id: usb_device
-            value: '3'
+            value: '6'
           type: Dynamic
         type: Values
       type: Integer
@@ -100,7 +100,11 @@ data:
       children:
       - children:
         - attributes:
-            value: '0x1234'
+            id: usb_device
+            value: '0x0208'
+          type: Dynamic
+        - attributes:
+            value: '0x0208'
           type: User
         type: Values
       type: String
@@ -130,6 +134,10 @@ data:
       children:
       - children:
         - attributes:
+            id: usb_device
+            value: CDC Dual COM Port Demo
+          type: Dynamic
+        - attributes:
             value: SEP_PCB
           type: User
         type: Values
@@ -144,4 +152,25 @@ data:
           type: User
         type: Values
       type: Boolean
+    CONFIG_USB_DEVICE_MSD_DISK_IMAGE:
+      attributes:
+        id: CONFIG_USB_DEVICE_MSD_DISK_IMAGE
+      children:
+      - children:
+        - attributes:
+            id: usb_device
+            value: 'false'
+          type: Dynamic
+        type: Values
+      type: Boolean
+    CONFIG_USB_DEVICE_PRODUCT_ID_SELECTION_IDX0:
+      attributes:
+        id: CONFIG_USB_DEVICE_PRODUCT_ID_SELECTION_IDX0
+      children:
+      - children:
+        - attributes:
+            value: cdc_com_port_dual_demo
+          type: User
+        type: Values
+      type: Combo
   userData: {}

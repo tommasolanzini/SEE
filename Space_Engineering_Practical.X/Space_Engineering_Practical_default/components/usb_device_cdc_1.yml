@@ -1,11 +1,11 @@
 configVersion: 1.0.0
-componentName: usb_device_cdc_0
+componentName: usb_device_cdc_1
 coreVersion: 5.8.4
 device: ATSAMV71Q21B
 library: []
 dependency:
 - dependencyPackage: class com.microchip.mcc.harmony.HarmonyModule
-  name: usb_device_cdc_0
+  name: usb_device_cdc_1
   type: module
   version: ''
 - dependencyPackage: ''
@@ -23,8 +23,8 @@ data:
       children:
       - children:
         - attributes:
-            id: usb_device_cdc_0
-            value: '3'
+            id: usb_device_cdc_1
+            value: '6'
           type: Dynamic
         type: Values
       type: Integer
@@ -34,8 +34,8 @@ data:
       children:
       - children:
         - attributes:
-            id: usb_device_cdc_0
-            value: '2'
+            id: usb_device_cdc_1
+            value: '5'
           type: Dynamic
         type: Values
       type: Integer
@@ -45,8 +45,8 @@ data:
       children:
       - children:
         - attributes:
-            id: usb_device_cdc_0
-            value: '0'
+            id: usb_device_cdc_1
+            value: '2'
           type: Dynamic
         type: Values
       type: Integer
@@ -56,22 +56,11 @@ data:
       children:
       - children:
         - attributes:
-            id: usb_device_cdc_0
-            value: '1'
+            id: usb_device_cdc_1
+            value: '4'
           type: Dynamic
         type: Values
       type: Integer
-    CONFIG_USB_DEVICE_FUNCTION_USE_IAD:
-      attributes:
-        id: CONFIG_USB_DEVICE_FUNCTION_USE_IAD
-      children:
-      - children:
-        - attributes:
-            id: usb_device_cdc_0
-            value: 'true'
-          type: Dynamic
-        type: Values
-      type: Boolean
     CONFIG_USB_DEVICE_FUNCTION_READ_Q_SIZE:
       attributes:
         id: CONFIG_USB_DEVICE_FUNCTION_READ_Q_SIZE
@@ -82,9 +71,9 @@ data:
           type: User
         type: Values
       type: Integer
-    CONFIG_USB_DEVICE_FUNCTION_WRITE_Q_SIZE:
+    CONFIG_USB_DEVICE_FUNCTION_SERIAL_NOTIFIACATION_Q_SIZE:
       attributes:
-        id: CONFIG_USB_DEVICE_FUNCTION_WRITE_Q_SIZE
+        id: CONFIG_USB_DEVICE_FUNCTION_SERIAL_NOTIFIACATION_Q_SIZE
       children:
       - children:
         - attributes:
@@ -92,9 +81,20 @@ data:
           type: User
         type: Values
       type: Integer
-    CONFIG_USB_DEVICE_FUNCTION_SERIAL_NOTIFIACATION_Q_SIZE:
+    CONFIG_USB_DEVICE_FUNCTION_USE_IAD:
       attributes:
-        id: CONFIG_USB_DEVICE_FUNCTION_SERIAL_NOTIFIACATION_Q_SIZE
+        id: CONFIG_USB_DEVICE_FUNCTION_USE_IAD
+      children:
+      - children:
+        - attributes:
+            id: usb_device_cdc_1
+            value: 'true'
+          type: Dynamic
+        type: Values
+      type: Boolean
+    CONFIG_USB_DEVICE_FUNCTION_WRITE_Q_SIZE:
+      attributes:
+        id: CONFIG_USB_DEVICE_FUNCTION_WRITE_Q_SIZE
       children:
       - children:
         - attributes:

@@ -228,17 +228,18 @@
                      displayName="Space_Engineering_Practical_default"
                      projectFiles="true">
         <logicalFolder name="components" displayName="components" projectFiles="true">
-          <itemPath>Space_Engineering_Practical_default/components/drv_usbhs_v1.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/sys_time.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/usb_device.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/core.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/cmsis.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/usb_device_cdc.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/dfp.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/HarmonyCore.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/usb_device_cdc_0.yml</itemPath>
-          <itemPath>Space_Engineering_Practical_default/components/efc.yml</itemPath>
           <itemPath>Space_Engineering_Practical_default/components/tc0.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/usb_device_cdc.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/usb_device.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/sys_time.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/usb_device_cdc_0.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/cmsis.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/efc.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/drv_usbhs_v1.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/HarmonyCore.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/dfp.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/core.yml</itemPath>
+          <itemPath>Space_Engineering_Practical_default/components/usb_device_cdc_1.yml</itemPath>
         </logicalFolder>
         <itemPath>Space_Engineering_Practical_default/mcc-config.mc4</itemPath>
       </logicalFolder>

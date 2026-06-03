@@ -52,9 +52,19 @@
 /* MISRA C-2012 Rule 10.3 deviated:4 Deviation record ID -  H3_USB_MISRAC_2012_R_10_3_DR_1 */
 static const USB_DEVICE_CDC_INIT cdcInit0 =
 {
-    .queueSizeRead = 1,
-    .queueSizeWrite = 1,
-    .queueSizeSerialStateNotification = 1
+    .queueSizeRead = 1024,
+    .queueSizeWrite = 1024,
+    .queueSizeSerialStateNotification = 1024
+};
+/* MISRAC 2012 deviation block end */   
+
+
+/* MISRA C-2012 Rule 10.3 deviated:4 Deviation record ID -  H3_USB_MISRAC_2012_R_10_3_DR_1 */
+static const USB_DEVICE_CDC_INIT cdcInit1 =
+{
+    .queueSizeRead = 1024,
+    .queueSizeWrite = 1024,
+    .queueSizeSerialStateNotification = 1024
 };
 /* MISRAC 2012 deviation block end */   
 
@@ -66,7 +76,7 @@ static const USB_DEVICE_CDC_INIT cdcInit0 =
  **************************************************/
 /* MISRA C-2012 Rule 10.3 deviated:2, 11.8 deviated:6 deviated below. Deviation record ID -  
    H3_USB_MISRAC_2012_R_10_3_DR_1 & H3_USB_MISRAC_2012_R_11_8_DR_1*/
-static const USB_DEVICE_FUNCTION_REGISTRATION_TABLE funcRegistrationTable[1] =
+static const USB_DEVICE_FUNCTION_REGISTRATION_TABLE funcRegistrationTable[2] =
 {
         /* CDC Function 0 */
     {
@@ -77,6 +87,17 @@ static const USB_DEVICE_FUNCTION_REGISTRATION_TABLE funcRegistrationTable[1] =
         .funcDriverIndex = 0,                               // Index of CDC Function Driver
         .driver = (void*)USB_DEVICE_CDC_FUNCTION_DRIVER,    // USB CDC function data exposed to device layer
         .funcDriverInit = (void*)&cdcInit0                  // Function driver init data
+    },
+
+    /* CDC Function 1 */
+    {
+        .configurationValue = 1,                            // Configuration value
+        .interfaceNumber = 2,                               // First interfaceNumber of this function
+        .speed = (USB_SPEED)((uint32_t)USB_SPEED_HIGH|(uint32_t)USB_SPEED_FULL),             // Function Speed
+        .numberOfInterfaces = 2,                            // Number of interfaces
+        .funcDriverIndex = 1,                               // Index of CDC Function Driver
+        .driver = (void*)USB_DEVICE_CDC_FUNCTION_DRIVER,    // USB CDC function data exposed to device layer
+        .funcDriverInit = (void*)&cdcInit1                  // Function driver init data
     },
 
 
@@ -93,14 +114,12 @@ static const USB_DEVICE_DESCRIPTOR usbDeviceDescriptor =
     0x12,                                                   // Size of this descriptor in bytes
     (uint8_t)USB_DESCRIPTOR_DEVICE,                                  // DEVICE descriptor type
     0x0200,                                                 // USB Spec Release Number in BCD format
-    USB_CDC_CLASS_CODE,                                     // Class Code
-    USB_CDC_SUBCLASS_CODE,                                  // Subclass code
-    0x00,                                                   // Protocol code
-
-
+    0xEF,                                                   // Class Code
+    0x02,                                                   // Subclass code
+    0x01,                                                   // Protocol code
     USB_DEVICE_EP0_BUFFER_SIZE,                             // Max packet size for EP0, see configuration.h
     0x04D8,                                                 // Vendor ID
-    0x1234,                                                 // Product ID
+    0x0208,                                                 // Product ID
     0x0100,                                                 // Device release number in BCD format
     0x01,                                                   // Manufacturer string index
     0x02,                                                   // Product string index
@@ -117,11 +136,9 @@ static const USB_DEVICE_QUALIFIER deviceQualifierDescriptor1 =
     0x0A,                                                   // Size of this descriptor in bytes
     USB_DESCRIPTOR_DEVICE_QUALIFIER,                        // Device Qualifier Type
     0x0200,                                                 // USB Specification Release number
-    USB_CDC_CLASS_CODE,                                     // Class Code
-    USB_CDC_SUBCLASS_CODE,                                  // Subclass code
-    0x00,                                                   // Protocol code
-
-
+    0xEF,                                                   // Class Code
+    0x02,                                                   // Subclass code
+    0x01,                                                   // Protocol code
     USB_DEVICE_EP0_BUFFER_SIZE,                             // Maximum packet size for endpoint 0
     0x01,                                                   // Number of possible configurations
     0x00                                                    // Reserved for future use.
@@ -137,13 +154,23 @@ static const uint8_t highSpeedConfigurationDescriptor[]=
 
     0x09,                                               // Size of this descriptor in bytes
     (uint8_t)USB_DESCRIPTOR_CONFIGURATION,                       // Descriptor Type
-    USB_DEVICE_16bitTo8bitArrange(67),                  //(67 Bytes)Size of the Configuration descriptor
-    2,                                                  // Number of interfaces in this configuration
+    USB_DEVICE_16bitTo8bitArrange(141),                  //(141 Bytes)Size of the Configuration descriptor
+    4,                                                  // Number of interfaces in this configuration
     0x01,                                               // Index value of this configuration
     0x00,                                               // Configuration string index
     USB_ATTRIBUTE_DEFAULT | USB_ATTRIBUTE_REMOTE_WAKEUP, // Attributes
     50,                                                 // Maximum Power: 100mA
 
+    /* Descriptor for Function - CDC     */
+    /* Interface Association Descriptor: CDC Function*/
+    0x08,   // Size of this descriptor in bytes
+    0x0B,   // Interface association descriptor type
+    0,   // The first associated interface
+    0x02,   // Number of contiguous associated interface
+    0x02,   // bInterfaceClass of the first interface
+    0x02,   // bInterfaceSubclass of the first interface
+    0x01,   // bInterfaceProtocol of the first interface
+    0x00,   // Interface string index
     /* Interface Descriptor */
 
     0x09,                                           // Size of this descriptor in bytes
@@ -220,6 +247,92 @@ static const uint8_t highSpeedConfigurationDescriptor[]=
     0x00,                       // Interval (in ms)
 
 
+    /* Descriptor for Function - CDC     */
+    /* Interface Association Descriptor: CDC Function*/
+    0x08,   // Size of this descriptor in bytes
+    0x0B,   // Interface association descriptor type
+    2,   // The first associated interface
+    0x02,   // Number of contiguous associated interface
+    0x02,   // bInterfaceClass of the first interface
+    0x02,   // bInterfaceSubclass of the first interface
+    0x01,   // bInterfaceProtocol of the first interface
+    0x00,   // Interface string index
+    /* Interface Descriptor */
+
+    0x09,                                           // Size of this descriptor in bytes
+    USB_DESCRIPTOR_INTERFACE,                       // Descriptor Type is Interface descriptor
+    2,                                  // Interface Number
+    0x00,                                           // Alternate Setting Number
+    0x01,                                           // Number of endpoints in this interface
+    USB_CDC_COMMUNICATIONS_INTERFACE_CLASS_CODE,    // Class code
+    (uint8_t)USB_CDC_SUBCLASS_ABSTRACT_CONTROL_MODEL,        // Subclass code
+    (uint8_t)USB_CDC_PROTOCOL_AT_V250,                       // Protocol code
+    0x00,                                           // Interface string index
+
+    /* CDC Class-Specific Descriptors */
+
+    (uint8_t)sizeof(USB_CDC_HEADER_FUNCTIONAL_DESCRIPTOR),               // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                  // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_HEADER,                                  // Type of functional descriptor
+    0x20,0x01,                                                  // CDC spec version
+
+    (uint8_t)sizeof(USB_CDC_ACM_FUNCTIONAL_DESCRIPTOR),                  // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                  // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_ABSTRACT_CONTROL_MANAGEMENT,             // Type of functional descriptor
+    USB_CDC_ACM_SUPPORT_LINE_CODING_LINE_STATE_AND_NOTIFICATION,// bmCapabilities of ACM
+
+    sizeof(USB_CDC_UNION_FUNCTIONAL_DESCRIPTOR_HEADER) + 1,     // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                  // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_UNION,                                   // Type of functional descriptor
+    2,                                                       // com interface number
+    3,
+
+    (uint8_t)sizeof(USB_CDC_CALL_MANAGEMENT_DESCRIPTOR),                 // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                  // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_CALL_MANAGEMENT,                         // Type of functional descriptor
+    0x00,                                                       // bmCapabilities of CallManagement
+    3,                                                       // Data interface number
+
+    /* Interrupt Endpoint (IN) Descriptor */
+
+    0x07,                           // Size of this descriptor
+    USB_DESCRIPTOR_ENDPOINT,        // Endpoint Descriptor
+    4 | USB_EP_DIRECTION_IN,    // EndpointAddress ( EP4 IN INTERRUPT)
+    (uint8_t)USB_TRANSFER_TYPE_INTERRUPT,    // Attributes type of EP (INTERRUPT)
+    0x10,0x00,                      // Max packet size of this EP
+    0x02,                           // Interval (in ms)
+
+    /* Interface Descriptor */
+
+    0x09,                               // Size of this descriptor in bytes
+    USB_DESCRIPTOR_INTERFACE,           // INTERFACE descriptor type
+    3,      // Interface Number
+    0x00,                               // Alternate Setting Number
+    0x02,                               // Number of endpoints in this interface
+    USB_CDC_DATA_INTERFACE_CLASS_CODE,  // Class code
+    0x00,                               // Subclass code
+    (uint8_t)USB_CDC_PROTOCOL_NO_CLASS_SPECIFIC, // Protocol code
+    0x00,                               // Interface string index
+
+    /* Bulk Endpoint (OUT) Descriptor */
+
+    0x07,                       // Size of this descriptor
+    USB_DESCRIPTOR_ENDPOINT,    // Endpoint Descriptor
+    5 | USB_EP_DIRECTION_OUT,   // EndpointAddress ( EP5 OUT )
+    (uint8_t)USB_TRANSFER_TYPE_BULK,     // Attributes type of EP (BULK)
+    0x00, 0x02,                 // Max packet size of this EP
+    0x00,                       // Interval (in ms)
+
+     /* Bulk Endpoint (IN)Descriptor */
+
+    0x07,                       // Size of this descriptor
+    USB_DESCRIPTOR_ENDPOINT,    // Endpoint Descriptor
+    6 | USB_EP_DIRECTION_IN,    // EndpointAddress ( EP6 IN )
+    0x02,                       // Attributes type of EP (BULK)
+    0x00, 0x02,                 // Max packet size of this EP
+    0x00,                       // Interval (in ms)
+
+
 
 };
 /* MISRAC 2012 deviation block end */   
@@ -241,12 +354,23 @@ static const uint8_t fullSpeedConfigurationDescriptor[]=
 
     0x09,                                                   // Size of this descriptor in bytes
     (uint8_t)USB_DESCRIPTOR_CONFIGURATION,                           // Descriptor Type
-    USB_DEVICE_16bitTo8bitArrange(67),                      //(67 Bytes)Size of the Configuration descriptor
-    2,                                                      // Number of interfaces in this configuration
+    USB_DEVICE_16bitTo8bitArrange(141),                      //(141 Bytes)Size of the Configuration descriptor
+    4,                                                      // Number of interfaces in this configuration
     0x01,                                                   // Index value of this configuration
     0x00,                                                   // Configuration string index
     USB_ATTRIBUTE_DEFAULT | USB_ATTRIBUTE_REMOTE_WAKEUP, // Attributes
     50,                                                 // Maximum Power: 100mA
+
+    /* Descriptor for Function - CDC     */
+    /* Interface Association Descriptor: CDC Function*/
+    0x08,   // Size of this descriptor in bytes
+    0x0B,   // Interface association descriptor type
+    0,   // The first associated interface
+    0x02,   // Number of contiguous associated interface
+    0x02,   // bInterfaceClass of the first interface
+    0x02,   // bInterfaceSubclass of the first interface
+    0x01,   // bInterfaceProtocol of the first interface
+    0x00,   // Interface string index
     /* Interface Descriptor */
 
     0x09,                                                   // Size of this descriptor in bytes
@@ -318,6 +442,93 @@ static const uint8_t fullSpeedConfigurationDescriptor[]=
     0x07,                                                   // Size of this descriptor
     USB_DESCRIPTOR_ENDPOINT,                                // Endpoint Descriptor
     3 | USB_EP_DIRECTION_IN,                                // EndpointAddress ( EP3 IN )
+    0x02,                                                   // Attributes type of EP (BULK)
+    0x40, 0x00,                                             // Max packet size of this EP
+    0x00,                                                   // Interval (in ms)
+
+
+
+    /* Descriptor for Function - CDC     */
+    /* Interface Association Descriptor: CDC Function*/
+    0x08,   // Size of this descriptor in bytes
+    0x0B,   // Interface association descriptor type
+    2,   // The first associated interface
+    0x02,   // Number of contiguous associated interface
+    0x02,   // bInterfaceClass of the first interface
+    0x02,   // bInterfaceSubclass of the first interface
+    0x01,   // bInterfaceProtocol of the first interface
+    0x00,   // Interface string index
+    /* Interface Descriptor */
+
+    0x09,                                                   // Size of this descriptor in bytes
+    (uint8_t)USB_DESCRIPTOR_INTERFACE,                               // Descriptor Type is Interface descriptor
+    2,                                                      // Interface Number
+    0x00,                                                   // Alternate Setting Number
+    0x01,                                                   // Number of endpoints in this interface
+    USB_CDC_COMMUNICATIONS_INTERFACE_CLASS_CODE,            // Class code
+    (uint8_t)USB_CDC_SUBCLASS_ABSTRACT_CONTROL_MODEL,                // Subclass code
+    (uint8_t)USB_CDC_PROTOCOL_AT_V250,                               // Protocol code
+    0x00,                                                   // Interface string index
+
+    /* CDC Class-Specific Descriptors */
+
+    (uint8_t)sizeof(USB_CDC_HEADER_FUNCTIONAL_DESCRIPTOR),                   // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                      // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_HEADER,                                      // Type of functional descriptor
+    0x20,0x01,                                                      // CDC spec version
+
+    (uint8_t)sizeof(USB_CDC_ACM_FUNCTIONAL_DESCRIPTOR),                      // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                      // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_ABSTRACT_CONTROL_MANAGEMENT,                 // Type of functional descriptor
+    USB_CDC_ACM_SUPPORT_LINE_CODING_LINE_STATE_AND_NOTIFICATION,    // bmCapabilities of ACM
+
+    sizeof(USB_CDC_UNION_FUNCTIONAL_DESCRIPTOR_HEADER) + 1,         // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                      // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_UNION,                                       // Type of functional descriptor
+    2,                                                              // com interface number
+    3,
+
+    (uint8_t)sizeof(USB_CDC_CALL_MANAGEMENT_DESCRIPTOR),                     // Size of the descriptor
+    (uint8_t)USB_CDC_DESC_CS_INTERFACE,                                      // CS_INTERFACE
+    (uint8_t)USB_CDC_FUNCTIONAL_CALL_MANAGEMENT,                             // Type of functional descriptor
+    0x00,                                                           // bmCapabilities of CallManagement
+    3,                                                              // Data interface number
+
+    /* Interrupt Endpoint (IN) Descriptor */
+
+    0x07,                                                   // Size of this descriptor
+    USB_DESCRIPTOR_ENDPOINT,                                // Endpoint Descriptor
+    4 | USB_EP_DIRECTION_IN,                                // EndpointAddress ( EP4 IN INTERRUPT)
+    (uint8_t)USB_TRANSFER_TYPE_INTERRUPT,                            // Attributes type of EP (INTERRUPT)
+    0x10,0x00,                                              // Max packet size of this EP
+    0x02,                                                   // Interval (in ms)
+
+    /* Interface Descriptor */
+
+    0x09,                                                   // Size of this descriptor in bytes
+    USB_DESCRIPTOR_INTERFACE,                               // INTERFACE descriptor type
+    3,                                                      // Interface Number
+    0x00,                                                   // Alternate Setting Number
+    0x02,                                                   // Number of endpoints in this interface
+    USB_CDC_DATA_INTERFACE_CLASS_CODE,                      // Class code
+    0x00,                                                   // Subclass code
+    (uint8_t)USB_CDC_PROTOCOL_NO_CLASS_SPECIFIC,                     // Protocol code
+    0x00,                                                   // Interface string index
+
+    /* Bulk Endpoint (OUT) Descriptor */
+
+    0x07,                                                   // Size of this descriptor
+    USB_DESCRIPTOR_ENDPOINT,                                // Endpoint Descriptor
+    5 | USB_EP_DIRECTION_OUT,                               // EndpointAddress ( EP5 OUT )
+    (uint8_t)USB_TRANSFER_TYPE_BULK,                                 // Attributes type of EP (BULK)
+    0x40, 0x00,                                             // Max packet size of this EP
+    0x00,                                                   // Interval (in ms)
+
+     /* Bulk Endpoint (IN)Descriptor */
+
+    0x07,                                                   // Size of this descriptor
+    USB_DESCRIPTOR_ENDPOINT,                                // Endpoint Descriptor
+    6 | USB_EP_DIRECTION_IN,                                // EndpointAddress ( EP6 IN )
     0x02,                                                   // Attributes type of EP (BULK)
     0x40, 0x00,                                             // Max packet size of this EP
     0x00,                                                   // Interval (in ms)
@@ -425,7 +636,7 @@ const USB_DEVICE_INIT usbDevInitData =
 {
     /* Number of function drivers registered to this instance of the
        USB device layer */
-    .registeredFuncCount = 1,
+    .registeredFuncCount = 2,
 
     /* Function driver table registered to this instance of the USB device layer*/
     .registeredFunctions = (USB_DEVICE_FUNCTION_REGISTRATION_TABLE*)funcRegistrationTable,

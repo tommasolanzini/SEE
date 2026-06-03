@@ -22,8 +22,8 @@ data:
     - children:
       - attributes:
           id: usb_device_cdc
-          x: '453'
-          y: '21'
+          x: '408'
+          y: '26'
         type: ElementPosition
       type: ElementPositions
     type: ComponentGraph
@@ -35,7 +35,18 @@ data:
       - children:
         - attributes:
             id: usb_device_cdc
-            value: '1'
+            value: '2'
+          type: Dynamic
+        type: Values
+      type: Integer
+    CONFIG_USB_DEVICE_CDC_QUEUE_DEPTH_COMBINED:
+      attributes:
+        id: CONFIG_USB_DEVICE_CDC_QUEUE_DEPTH_COMBINED
+      children:
+      - children:
+        - attributes:
+            id: usb_device_cdc
+            value: '21495'
           type: Dynamic
         type: Values
       type: Integer
