@@ -62,6 +62,63 @@
 // *****************************************************************************
 
 
+/*** Macros for LE_F3 pin ***/
+#define LE_F3_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<13U))
+#define LE_F3_Clear()             (PIOC_REGS->PIO_CODR = ((uint32_t)1U<<13U))
+#define LE_F3_Toggle()            (PIOC_REGS->PIO_ODSR ^= ((uint32_t)1U<<13U))
+#define LE_F3_OutputEnable()      (PIOC_REGS->PIO_OER = ((uint32_t)1U<<13U))
+#define LE_F3_InputEnable()       (PIOC_REGS->PIO_ODR = ((uint32_t)1U<<13U))
+#define LE_F3_Get()               ((PIOC_REGS->PIO_PDSR >> 13U) & 0x1U)
+#define LE_F3_PIN                  PIO_PIN_PC13
+
+/*** Macros for F3V3_F3 pin ***/
+#define F3V3_F3_Set()               (PIOB_REGS->PIO_SODR = ((uint32_t)1U<<1U))
+#define F3V3_F3_Clear()             (PIOB_REGS->PIO_CODR = ((uint32_t)1U<<1U))
+#define F3V3_F3_Toggle()            (PIOB_REGS->PIO_ODSR ^= ((uint32_t)1U<<1U))
+#define F3V3_F3_OutputEnable()      (PIOB_REGS->PIO_OER = ((uint32_t)1U<<1U))
+#define F3V3_F3_InputEnable()       (PIOB_REGS->PIO_ODR = ((uint32_t)1U<<1U))
+#define F3V3_F3_Get()               ((PIOB_REGS->PIO_PDSR >> 1U) & 0x1U)
+#define F3V3_F3_PIN                  PIO_PIN_PB1
+
+/*** Macros for SEL_F3 pin ***/
+#define SEL_F3_Set()               (PIOB_REGS->PIO_SODR = ((uint32_t)1U<<0U))
+#define SEL_F3_Clear()             (PIOB_REGS->PIO_CODR = ((uint32_t)1U<<0U))
+#define SEL_F3_Toggle()            (PIOB_REGS->PIO_ODSR ^= ((uint32_t)1U<<0U))
+#define SEL_F3_OutputEnable()      (PIOB_REGS->PIO_OER = ((uint32_t)1U<<0U))
+#define SEL_F3_InputEnable()       (PIOB_REGS->PIO_ODR = ((uint32_t)1U<<0U))
+#define SEL_F3_Get()               ((PIOB_REGS->PIO_PDSR >> 0U) & 0x1U)
+#define SEL_F3_PIN                  PIO_PIN_PB0
+
+/*** Macros for AMP_OUT3 pin ***/
+#define AMP_OUT3_Get()               ((PIOA_REGS->PIO_PDSR >> 20U) & 0x1U)
+#define AMP_OUT3_PIN                  PIO_PIN_PA20
+
+/*** Macros for AMP_OUT2 pin ***/
+#define AMP_OUT2_Get()               ((PIOA_REGS->PIO_PDSR >> 19U) & 0x1U)
+#define AMP_OUT2_PIN                  PIO_PIN_PA19
+
+/*** Macros for AMP_OUT1 pin ***/
+#define AMP_OUT1_Get()               ((PIOA_REGS->PIO_PDSR >> 18U) & 0x1U)
+#define AMP_OUT1_PIN                  PIO_PIN_PA18
+
+/*** Macros for LE_F2 pin ***/
+#define LE_F2_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<30U))
+#define LE_F2_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<30U))
+#define LE_F2_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<30U))
+#define LE_F2_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<30U))
+#define LE_F2_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<30U))
+#define LE_F2_Get()               ((PIOD_REGS->PIO_PDSR >> 30U) & 0x1U)
+#define LE_F2_PIN                  PIO_PIN_PD30
+
+/*** Macros for F3V3_F2 pin ***/
+#define F3V3_F2_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<22U))
+#define F3V3_F2_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<22U))
+#define F3V3_F2_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<22U))
+#define F3V3_F2_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<22U))
+#define F3V3_F2_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<22U))
+#define F3V3_F2_Get()               ((PIOA_REGS->PIO_PDSR >> 22U) & 0x1U)
+#define F3V3_F2_PIN                  PIO_PIN_PA22
+
 /*** Macros for F3_RB pin ***/
 #define F3_RB_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<1U))
 #define F3_RB_Clear()             (PIOC_REGS->PIO_CODR = ((uint32_t)1U<<1U))
@@ -89,23 +146,59 @@
 #define F1_RB_Get()               ((PIOC_REGS->PIO_PDSR >> 3U) & 0x1U)
 #define F1_RB_PIN                  PIO_PIN_PC3
 
-/*** Macros for NAND_D1 pin ***/
-#define NAND_D1_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<23U))
-#define NAND_D1_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<23U))
-#define NAND_D1_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<23U))
-#define NAND_D1_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<23U))
-#define NAND_D1_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<23U))
-#define NAND_D1_Get()               ((PIOA_REGS->PIO_PDSR >> 23U) & 0x1U)
-#define NAND_D1_PIN                  PIO_PIN_PA23
+/*** Macros for SEL_F2 pin ***/
+#define SEL_F2_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<16U))
+#define SEL_F2_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<16U))
+#define SEL_F2_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<16U))
+#define SEL_F2_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<16U))
+#define SEL_F2_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<16U))
+#define SEL_F2_Get()               ((PIOA_REGS->PIO_PDSR >> 16U) & 0x1U)
+#define SEL_F2_PIN                  PIO_PIN_PA16
 
-/*** Macros for NAND_D4 pin ***/
-#define NAND_D4_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<25U))
-#define NAND_D4_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<25U))
-#define NAND_D4_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<25U))
-#define NAND_D4_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<25U))
-#define NAND_D4_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<25U))
-#define NAND_D4_Get()               ((PIOD_REGS->PIO_PDSR >> 25U) & 0x1U)
-#define NAND_D4_PIN                  PIO_PIN_PD25
+/*** Macros for SEL_F1 pin ***/
+#define SEL_F1_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<23U))
+#define SEL_F1_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<23U))
+#define SEL_F1_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<23U))
+#define SEL_F1_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<23U))
+#define SEL_F1_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<23U))
+#define SEL_F1_Get()               ((PIOA_REGS->PIO_PDSR >> 23U) & 0x1U)
+#define SEL_F1_PIN                  PIO_PIN_PA23
+
+/*** Macros for LE_F1 pin ***/
+#define LE_F1_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<27U))
+#define LE_F1_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<27U))
+#define LE_F1_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<27U))
+#define LE_F1_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<27U))
+#define LE_F1_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<27U))
+#define LE_F1_Get()               ((PIOD_REGS->PIO_PDSR >> 27U) & 0x1U)
+#define LE_F1_PIN                  PIO_PIN_PD27
+
+/*** Macros for F3V3_F1 pin ***/
+#define F3V3_F1_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<7U))
+#define F3V3_F1_Clear()             (PIOC_REGS->PIO_CODR = ((uint32_t)1U<<7U))
+#define F3V3_F1_Toggle()            (PIOC_REGS->PIO_ODSR ^= ((uint32_t)1U<<7U))
+#define F3V3_F1_OutputEnable()      (PIOC_REGS->PIO_OER = ((uint32_t)1U<<7U))
+#define F3V3_F1_InputEnable()       (PIOC_REGS->PIO_ODR = ((uint32_t)1U<<7U))
+#define F3V3_F1_Get()               ((PIOC_REGS->PIO_PDSR >> 7U) & 0x1U)
+#define F3V3_F1_PIN                  PIO_PIN_PC7
+
+/*** Macros for NAND_D0 pin ***/
+#define NAND_D0_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<25U))
+#define NAND_D0_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<25U))
+#define NAND_D0_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<25U))
+#define NAND_D0_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<25U))
+#define NAND_D0_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<25U))
+#define NAND_D0_Get()               ((PIOD_REGS->PIO_PDSR >> 25U) & 0x1U)
+#define NAND_D0_PIN                  PIO_PIN_PD25
+
+/*** Macros for NAND_D1 pin ***/
+#define NAND_D1_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<26U))
+#define NAND_D1_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<26U))
+#define NAND_D1_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<26U))
+#define NAND_D1_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<26U))
+#define NAND_D1_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<26U))
+#define NAND_D1_Get()               ((PIOD_REGS->PIO_PDSR >> 26U) & 0x1U)
+#define NAND_D1_PIN                  PIO_PIN_PD26
 
 /*** Macros for NAND_D2 pin ***/
 #define NAND_D2_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<6U))
@@ -116,32 +209,32 @@
 #define NAND_D2_Get()               ((PIOC_REGS->PIO_PDSR >> 6U) & 0x1U)
 #define NAND_D2_PIN                  PIO_PIN_PC6
 
-/*** Macros for NAND_D0 pin ***/
-#define NAND_D0_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<24U))
-#define NAND_D0_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<24U))
-#define NAND_D0_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<24U))
-#define NAND_D0_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<24U))
-#define NAND_D0_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<24U))
-#define NAND_D0_Get()               ((PIOD_REGS->PIO_PDSR >> 24U) & 0x1U)
-#define NAND_D0_PIN                  PIO_PIN_PD24
-
-/*** Macros for NAND_D7 pin ***/
-#define NAND_D7_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<24U))
-#define NAND_D7_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<24U))
-#define NAND_D7_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<24U))
-#define NAND_D7_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<24U))
-#define NAND_D7_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<24U))
-#define NAND_D7_Get()               ((PIOA_REGS->PIO_PDSR >> 24U) & 0x1U)
-#define NAND_D7_PIN                  PIO_PIN_PA24
-
 /*** Macros for NAND_D3 pin ***/
-#define NAND_D3_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<23U))
-#define NAND_D3_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<23U))
-#define NAND_D3_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<23U))
-#define NAND_D3_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<23U))
-#define NAND_D3_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<23U))
-#define NAND_D3_Get()               ((PIOD_REGS->PIO_PDSR >> 23U) & 0x1U)
-#define NAND_D3_PIN                  PIO_PIN_PD23
+#define NAND_D3_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<24U))
+#define NAND_D3_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<24U))
+#define NAND_D3_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<24U))
+#define NAND_D3_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<24U))
+#define NAND_D3_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<24U))
+#define NAND_D3_Get()               ((PIOD_REGS->PIO_PDSR >> 24U) & 0x1U)
+#define NAND_D3_PIN                  PIO_PIN_PD24
+
+/*** Macros for NAND_D4 pin ***/
+#define NAND_D4_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<24U))
+#define NAND_D4_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<24U))
+#define NAND_D4_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<24U))
+#define NAND_D4_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<24U))
+#define NAND_D4_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<24U))
+#define NAND_D4_Get()               ((PIOA_REGS->PIO_PDSR >> 24U) & 0x1U)
+#define NAND_D4_PIN                  PIO_PIN_PA24
+
+/*** Macros for NAND_D5 pin ***/
+#define NAND_D5_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<23U))
+#define NAND_D5_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<23U))
+#define NAND_D5_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<23U))
+#define NAND_D5_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<23U))
+#define NAND_D5_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<23U))
+#define NAND_D5_Get()               ((PIOD_REGS->PIO_PDSR >> 23U) & 0x1U)
+#define NAND_D5_PIN                  PIO_PIN_PD23
 
 /*** Macros for NAND_D6 pin ***/
 #define NAND_D6_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<5U))
@@ -152,32 +245,59 @@
 #define NAND_D6_Get()               ((PIOC_REGS->PIO_PDSR >> 5U) & 0x1U)
 #define NAND_D6_PIN                  PIO_PIN_PC5
 
-/*** Macros for NAND_D5 pin ***/
-#define NAND_D5_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<22U))
-#define NAND_D5_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<22U))
-#define NAND_D5_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<22U))
-#define NAND_D5_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<22U))
-#define NAND_D5_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<22U))
-#define NAND_D5_Get()               ((PIOD_REGS->PIO_PDSR >> 22U) & 0x1U)
-#define NAND_D5_PIN                  PIO_PIN_PD22
+/*** Macros for NAND_D7 pin ***/
+#define NAND_D7_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<25U))
+#define NAND_D7_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<25U))
+#define NAND_D7_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<25U))
+#define NAND_D7_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<25U))
+#define NAND_D7_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<25U))
+#define NAND_D7_Get()               ((PIOA_REGS->PIO_PDSR >> 25U) & 0x1U)
+#define NAND_D7_PIN                  PIO_PIN_PA25
 
-/*** Macros for FLASH2_CE pin ***/
-#define FLASH2_CE_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<11U))
-#define FLASH2_CE_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<11U))
-#define FLASH2_CE_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<11U))
-#define FLASH2_CE_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<11U))
-#define FLASH2_CE_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<11U))
-#define FLASH2_CE_Get()               ((PIOA_REGS->PIO_PDSR >> 11U) & 0x1U)
-#define FLASH2_CE_PIN                  PIO_PIN_PA11
+/*** Macros for CE_F3 pin ***/
+#define CE_F3_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<21U))
+#define CE_F3_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<21U))
+#define CE_F3_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<21U))
+#define CE_F3_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<21U))
+#define CE_F3_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<21U))
+#define CE_F3_Get()               ((PIOD_REGS->PIO_PDSR >> 21U) & 0x1U)
+#define CE_F3_PIN                  PIO_PIN_PD21
 
-/*** Macros for NAND_RE pin ***/
-#define NAND_RE_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<10U))
-#define NAND_RE_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<10U))
-#define NAND_RE_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<10U))
-#define NAND_RE_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<10U))
-#define NAND_RE_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<10U))
-#define NAND_RE_Get()               ((PIOA_REGS->PIO_PDSR >> 10U) & 0x1U)
-#define NAND_RE_PIN                  PIO_PIN_PA10
+/*** Macros for CE_F2 pin ***/
+#define CE_F2_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<11U))
+#define CE_F2_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<11U))
+#define CE_F2_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<11U))
+#define CE_F2_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<11U))
+#define CE_F2_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<11U))
+#define CE_F2_Get()               ((PIOA_REGS->PIO_PDSR >> 11U) & 0x1U)
+#define CE_F2_PIN                  PIO_PIN_PA11
+
+/*** Macros for CE_F1 pin ***/
+#define CE_F1_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<20U))
+#define CE_F1_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<20U))
+#define CE_F1_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<20U))
+#define CE_F1_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<20U))
+#define CE_F1_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<20U))
+#define CE_F1_Get()               ((PIOD_REGS->PIO_PDSR >> 20U) & 0x1U)
+#define CE_F1_PIN                  PIO_PIN_PD20
+
+/*** Macros for NAND_OE pin ***/
+#define NAND_OE_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<10U))
+#define NAND_OE_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<10U))
+#define NAND_OE_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<10U))
+#define NAND_OE_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<10U))
+#define NAND_OE_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<10U))
+#define NAND_OE_Get()               ((PIOA_REGS->PIO_PDSR >> 10U) & 0x1U)
+#define NAND_OE_PIN                  PIO_PIN_PA10
+
+/*** Macros for NAND_WE pin ***/
+#define NAND_WE_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<19U))
+#define NAND_WE_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<19U))
+#define NAND_WE_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<19U))
+#define NAND_WE_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<19U))
+#define NAND_WE_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<19U))
+#define NAND_WE_Get()               ((PIOD_REGS->PIO_PDSR >> 19U) & 0x1U)
+#define NAND_WE_PIN                  PIO_PIN_PD19
 
 /*** Macros for NAND_CLE pin ***/
 #define NAND_CLE_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<12U))
@@ -188,50 +308,23 @@
 #define NAND_CLE_Get()               ((PIOA_REGS->PIO_PDSR >> 12U) & 0x1U)
 #define NAND_CLE_PIN                  PIO_PIN_PA12
 
-/*** Macros for KMS pin ***/
-#define KMS_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<0U))
-#define KMS_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<0U))
-#define KMS_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<0U))
-#define KMS_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<0U))
-#define KMS_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<0U))
-#define KMS_Get()               ((PIOA_REGS->PIO_PDSR >> 0U) & 0x1U)
-#define KMS_PIN                  PIO_PIN_PA0
-
 /*** Macros for NAND_ALE pin ***/
-#define NAND_ALE_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<18U))
-#define NAND_ALE_Clear()             (PIOC_REGS->PIO_CODR = ((uint32_t)1U<<18U))
-#define NAND_ALE_Toggle()            (PIOC_REGS->PIO_ODSR ^= ((uint32_t)1U<<18U))
-#define NAND_ALE_OutputEnable()      (PIOC_REGS->PIO_OER = ((uint32_t)1U<<18U))
-#define NAND_ALE_InputEnable()       (PIOC_REGS->PIO_ODR = ((uint32_t)1U<<18U))
-#define NAND_ALE_Get()               ((PIOC_REGS->PIO_PDSR >> 18U) & 0x1U)
-#define NAND_ALE_PIN                  PIO_PIN_PC18
+#define NAND_ALE_Set()               (PIOD_REGS->PIO_SODR = ((uint32_t)1U<<18U))
+#define NAND_ALE_Clear()             (PIOD_REGS->PIO_CODR = ((uint32_t)1U<<18U))
+#define NAND_ALE_Toggle()            (PIOD_REGS->PIO_ODSR ^= ((uint32_t)1U<<18U))
+#define NAND_ALE_OutputEnable()      (PIOD_REGS->PIO_OER = ((uint32_t)1U<<18U))
+#define NAND_ALE_InputEnable()       (PIOD_REGS->PIO_ODR = ((uint32_t)1U<<18U))
+#define NAND_ALE_Get()               ((PIOD_REGS->PIO_PDSR >> 18U) & 0x1U)
+#define NAND_ALE_PIN                  PIO_PIN_PD18
 
-/*** Macros for NAND_WE pin ***/
-#define NAND_WE_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<19U))
-#define NAND_WE_Clear()             (PIOC_REGS->PIO_CODR = ((uint32_t)1U<<19U))
-#define NAND_WE_Toggle()            (PIOC_REGS->PIO_ODSR ^= ((uint32_t)1U<<19U))
-#define NAND_WE_OutputEnable()      (PIOC_REGS->PIO_OER = ((uint32_t)1U<<19U))
-#define NAND_WE_InputEnable()       (PIOC_REGS->PIO_ODR = ((uint32_t)1U<<19U))
-#define NAND_WE_Get()               ((PIOC_REGS->PIO_PDSR >> 19U) & 0x1U)
-#define NAND_WE_PIN                  PIO_PIN_PC19
-
-/*** Macros for FLASH1_CE pin ***/
-#define FLASH1_CE_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<20U))
-#define FLASH1_CE_Clear()             (PIOC_REGS->PIO_CODR = ((uint32_t)1U<<20U))
-#define FLASH1_CE_Toggle()            (PIOC_REGS->PIO_ODSR ^= ((uint32_t)1U<<20U))
-#define FLASH1_CE_OutputEnable()      (PIOC_REGS->PIO_OER = ((uint32_t)1U<<20U))
-#define FLASH1_CE_InputEnable()       (PIOC_REGS->PIO_ODR = ((uint32_t)1U<<20U))
-#define FLASH1_CE_Get()               ((PIOC_REGS->PIO_PDSR >> 20U) & 0x1U)
-#define FLASH1_CE_PIN                  PIO_PIN_PC20
-
-/*** Macros for FLASH3_CE pin ***/
-#define FLASH3_CE_Set()               (PIOC_REGS->PIO_SODR = ((uint32_t)1U<<21U))
-#define FLASH3_CE_Clear()             (PIOC_REGS->PIO_CODR = ((uint32_t)1U<<21U))
-#define FLASH3_CE_Toggle()            (PIOC_REGS->PIO_ODSR ^= ((uint32_t)1U<<21U))
-#define FLASH3_CE_OutputEnable()      (PIOC_REGS->PIO_OER = ((uint32_t)1U<<21U))
-#define FLASH3_CE_InputEnable()       (PIOC_REGS->PIO_ODR = ((uint32_t)1U<<21U))
-#define FLASH3_CE_Get()               ((PIOC_REGS->PIO_PDSR >> 21U) & 0x1U)
-#define FLASH3_CE_PIN                  PIO_PIN_PC21
+/*** Macros for NAND_WP pin ***/
+#define NAND_WP_Set()               (PIOA_REGS->PIO_SODR = ((uint32_t)1U<<27U))
+#define NAND_WP_Clear()             (PIOA_REGS->PIO_CODR = ((uint32_t)1U<<27U))
+#define NAND_WP_Toggle()            (PIOA_REGS->PIO_ODSR ^= ((uint32_t)1U<<27U))
+#define NAND_WP_OutputEnable()      (PIOA_REGS->PIO_OER = ((uint32_t)1U<<27U))
+#define NAND_WP_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<27U))
+#define NAND_WP_Get()               ((PIOA_REGS->PIO_PDSR >> 27U) & 0x1U)
+#define NAND_WP_PIN                  PIO_PIN_PA27
 
 
 // *****************************************************************************

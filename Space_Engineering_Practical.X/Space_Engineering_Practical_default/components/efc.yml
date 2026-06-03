@@ -22,8 +22,8 @@ data:
     - children:
       - attributes:
           id: efc
-          x: '456'
-          y: '174'
+          x: '432'
+          y: '233'
         type: ElementPosition
       type: ElementPositions
     type: ComponentGraph

@@ -16,6 +16,7 @@ modules:
 - usb_device
 - usb_device_cdc
 - usb_device_cdc_0
+- usb_device_cdc_1
 generatedFileHashHistoryMap:
 - file: ..\src\app.c
   hash: 632c78c323cb9f8c6359f20337440c08f8461eb4b0304552b6a3cfd5c4052620
@@ -24,9 +25,9 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\ATSAMV71Q21B.ld
   hash: 0685903c7026c68a5d857ac6258bed5bd6e7748f91c87fdf878c5ecf8a8dccf6
 - file: ..\src\config\default\configuration.h
-  hash: 0088f98385405e484b685122b83740b8a7efe34afc935b034ed75c1a2f475c6c
+  hash: cca3a063d8c9e6f2389de124114128ff331aecbb5b8d3b5e9e5a8dfeb586f9d0
 - file: ..\src\config\default\definitions.h
-  hash: 28bf85b6640aa2f8272497677629ed6c63af32cbf764054841067911fcf8f8ac
+  hash: 0b0969bdb36c0ef9e06d71d98c571baed4443c714a81a2685de5a09e90289e7d
 - file: ..\src\config\default\device.h
   hash: 47f474a3b4b9ec65802211dc057e933edfd7d641d1136f1b0cfde28dcd8725e0
 - file: ..\src\config\default\device_cache.h
@@ -68,7 +69,7 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\osal\osal_impl_basic.h
   hash: 158c4107f883f6d8c0244b73273361d1ca2ebd57c0934572b11a25c532fd22c5
 - file: ..\src\config\default\peripheral\clk\plib_clk.c
-  hash: 0fd1e576f3ce1bb9553f6624cc15736644c3f8b6d804cebddc9d29821d9c45ca
+  hash: c3c3a8dadf9efdb5b4c9f876c15a7d8dff9832f90b5e28d0c092e2439f44caff
 - file: ..\src\config\default\peripheral\clk\plib_clk.h
   hash: 4f80a7fdb2529a654f89f11159078b9ebad3e5dddbd7fe60c58df49c05c8e55d
 - file: ..\src\config\default\peripheral\efc\plib_efc.c
@@ -80,9 +81,9 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\peripheral\nvic\plib_nvic.h
   hash: 9936ac782115af41003255283fa2f603f4ff2212d16275b7c80ea8d067a9e208
 - file: ..\src\config\default\peripheral\pio\plib_pio.c
-  hash: 72caf76b1f0e9a8c3db32302cec4dffb026e892c8ab8f3130eb7ac518b3ef3e4
+  hash: 704c4cbcf7cd57cc0a02066404110f77c045478cbd1444af9d6ffe3d0120a466
 - file: ..\src\config\default\peripheral\pio\plib_pio.h
-  hash: 067e85f4acd17fdf4e8b8b353302c163e785708f9a7e41cadfdec74cc3bcf2ee
+  hash: 38585d1f6f201467d2d0feba9bbd4d27f81076c9c07769a6983e9050c1835b92
 - file: ..\src\config\default\peripheral\tc\plib_tc0.c
   hash: 4d5a4efca80fca58ba09f149661a63c503f666cce5e3618db12cf62ee28076d7
 - file: ..\src\config\default\peripheral\tc\plib_tc0.h
@@ -90,7 +91,7 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\peripheral\tc\plib_tc_common.h
   hash: 920c335908d58caf6b00d824870cc7c8b80011a09c27e6ff7b56f6fc237ee5c5
 - file: ..\src\config\default\pin_configurations.csv
-  hash: d97c0752406d4b2885ae68fcf970978b226e4cd2b035629f79eaa7401d645d91
+  hash: 640aebd0b0d2ce71a42c3e08e37292ccd0e0480abfbc135b47de8114198dedc1
 - file: ..\src\config\default\startup_xc32.c
   hash: 96f78828471adddbe742293fda18ba0ca127dfa6dbc6c3bdf29552de13b14994
 - file: ..\src\config\default\stdio\xc32_monitor.c
@@ -162,7 +163,7 @@ generatedFileHashHistoryMap:
 - file: ..\src\config\default\usb\usb_hub.h
   hash: 66a9362619640002d6c8fe6335e044dd7c9cd4fe834d1b2487aa172a08af644b
 - file: ..\src\config\default\usb_device_init_data.c
-  hash: 536e69c457bcaa627ea83ab77a6d8622abd8863d4c421afd10c4ada531e16a39
+  hash: 68e9ae1c5de57175fb7dab60a88dd8f25bc7edd627abf4cd6642b341f8cbff7b
 - file: ..\src\config\default\user.h
   hash: 451e0878e9fcf6cf9fab046c1452ea662757988346c7f39e6bc98478ca25f995
 - file: ..\src\main.c
