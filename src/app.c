@@ -186,6 +186,11 @@ static inline uint8_t NAND_BusRead(void)
 /* Switch all 8 data pins to output (for write) */
 static inline void NAND_BusOutputEnable(void)
 {
+    /* Write to Output Enable Register (OER) to seize control of the pins */
+    PIOD_REGS->PIO_OER = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
+    PIOC_REGS->PIO_OER = (1UL << 6) | (1UL << 5);
+    PIOA_REGS->PIO_OER = (1UL << 24) | (1UL << 25);
+    
     NAND_D0_OutputEnable();
     NAND_D1_OutputEnable();
     NAND_D2_OutputEnable();
@@ -199,6 +204,11 @@ static inline void NAND_BusOutputEnable(void)
 /* Switch all 8 data pins to input (for read) */
 static inline void NAND_BusInputEnable(void)
 {
+    /* Write to Output Disable Register (ODR) to make pins high-impedance */
+    PIOD_REGS->PIO_ODR = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
+    PIOC_REGS->PIO_ODR = (1UL << 6) | (1UL << 5);
+    PIOA_REGS->PIO_ODR = (1UL << 24) | (1UL << 25);
+    
     NAND_D0_InputEnable();
     NAND_D1_InputEnable();
     NAND_D2_InputEnable();
@@ -291,8 +301,13 @@ static inline uint8_t NAND_ReadDataByte(void)
  */
 static bool NAND_WaitReady(void)
 {
-    DELAY_NS(tWB_NS); /* tWB: WE# high to R/B# going low */
+    //DELAY_NS(tWB_NS); /* tWB: WE# high to R/B# going low */
     uint32_t timeout = NAND_TIMEOUT_LOOPS;
+    while (timeout--)
+    {
+        if (!F3_RB_Get())
+            break;
+    }
     while (timeout--)
     {
         if (F3_RB_Get())
@@ -427,20 +442,25 @@ static bool NAND_WritePage(uint32_t block, uint32_t page,
         NAND_WriteDataByte(0xFFU);
 
     NAND_WriteCmd(0x10U); /* confirm / commit */
+    
+    /* 1. MANDATORY: Wait for the NAND to actually enter the BUSY state (tWB) */
+    DELAY_NS(2000); /* 2 microseconds to be absolutely safe */
 
-    bool ready = NAND_WaitReady();
-    if (!ready)
-    {
-        NAND_Deselect();
-        return false;
-    }
+    /* 2. Send Status Read command ONCE */
+    NAND_WriteCmd(0x70U);
+    DELAY_NS(tWHR_NS);
+    NAND_BusInputEnable();
 
-    uint8_t sr = NAND_ReadStatus();
+    /* 3. Continuously pulse RE# to read the status until READY is 1 */
+    uint8_t sr;
+    do {
+        sr = NAND_ReadDataByte();
+    } while ((sr & NAND_SR_READY) == 0U);
 
-    /* Re-enter data-output mode so the bus is in a clean state */
+    /* 4. Cleanup and return */
     NAND_WriteCmd(0x00U);
-
     NAND_Deselect();
+    
     return ((sr & NAND_SR_FAIL) == 0U);
 }
 
@@ -463,17 +483,23 @@ static bool NAND_EraseBlock(uint32_t block)
     NAND_WriteAddr((uint8_t)((row >> 16U) & 0xFFU));
     NAND_WriteCmd(0xD0U);
 
-    bool ready = NAND_WaitReady();
-    if (!ready)
-    {
-        NAND_Deselect();
-        return false;
-    }
+    /* Wait for the NAND to enter BUSY state */
+    DELAY_NS(2000);
 
-    uint8_t sr = NAND_ReadStatus();
+    /* Send Status Read command ONCE */
+    NAND_WriteCmd(0x70U);
+    DELAY_NS(tWHR_NS);
+    NAND_BusInputEnable();
+
+    /* Poll until READY */
+    uint8_t sr;
+    do {
+        sr = NAND_ReadDataByte();
+    } while ((sr & NAND_SR_READY) == 0U);
+
     NAND_WriteCmd(0x00U);
-
     NAND_Deselect();
+    
     return ((sr & NAND_SR_FAIL) == 0U);
 }
 
@@ -673,6 +699,24 @@ static void COM2_ProcessByte(uint8_t byte)
                 bool ok = NAND_EraseBlock(0U);
                 COM2_SendString(ok ? "OK:ERASE\r\n" : "ERR:ERASE\r\n");
             }
+            else if (byte == (uint8_t)'i' || byte == (uint8_t)'I')
+            {
+                NAND_Select();
+                NAND_WriteCmd(0x90U);  /* Read ID Command */
+                NAND_WriteAddr(0x00U); /* Address 00h */
+                
+                DELAY_NS(1000); /* Give it plenty of time */
+    
+                NAND_BusInputEnable();
+                uint8_t id1 = NAND_ReadDataByte();
+                uint8_t id2 = NAND_ReadDataByte();
+                NAND_Deselect();
+                
+                char msg[32];
+                /* Micron MT29F32G08CBACA should return 0x2C 0x68 */
+                sprintf(msg, "ID: %02X %02X\r\n", id1, id2);
+                COM2_SendString(msg);
+            }
             break;
 
         /* ── COLLECT_WRITE: gather 32 bytes then write ── */
@@ -702,6 +746,10 @@ void APP_Initialize(void)
     appData.deviceHandle  = USB_DEVICE_HANDLE_INVALID;
     appData.isConfigured  = false;
     appData.state         = APP_STATE_INIT;
+    
+    PIOA_REGS->PIO_WPMR = (0x50494FUL << 8);
+    PIOC_REGS->PIO_WPMR = (0x50494FUL << 8);
+    PIOD_REGS->PIO_WPMR = (0x50494FUL << 8);
 
     /* Line coding for both ports */
     for (int i = 0; i < 2; i++)
@@ -819,7 +867,7 @@ void APP_Tasks(void)
                    – the previous USB write has completed (prevents queueing two
                      writes at once and overwriting com2WriteBuffer mid-flight). */
                 if (com2State == COM2_COLLECT_WRITE ||
-                    appData.appCOMPortObjects[COM2].isWriteComplete)
+                    appData.appCOMPortObjects[COM2].isWriteComplete || 1)
                 {
                     for (uint16_t i = 0U; i < rxLen; i++)
                         COM2_ProcessByte(com2ReadBuffer[i]);

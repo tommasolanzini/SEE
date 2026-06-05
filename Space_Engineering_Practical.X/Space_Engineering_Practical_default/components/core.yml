@@ -7816,6 +7816,16 @@ data:
           type: User
         type: Values
       type: String
+    I2S1_CLOCK_FREQUENCY:
+      attributes:
+        id: I2S1_CLOCK_FREQUENCY
+      children:
+      - children:
+        - attributes:
+            value: '32768'
+          type: User
+        type: Values
+      type: String
   userData:
     children:
     - attributes:
