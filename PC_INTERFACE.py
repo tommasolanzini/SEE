@@ -3,7 +3,6 @@ import time
 import random 
 
 # --- Configuration ---
-# Use the raw string prefix r'\\.\' to bypass the Windows registry bug for COM ports
 COM_PORT = r'\\.\COM17'      
 BAUD_RATE = 9600
 SEND_SIZE = 512        # Payload size sent to MCU
@@ -15,20 +14,16 @@ NUM_WORDS_TO_TEST = 10
 def main():
     print(f"Opening {COM_PORT} at {BAUD_RATE} baud...")
     try:
-        # Added write_timeout to prevent Windows kernel freezes if the MCU ignores a write
         with serial.Serial(COM_PORT, BAUD_RATE, timeout=2.0, write_timeout=2.0) as ser:
             
             print("Port opened successfully! Giving USB stack 1 second to settle...")
-            # Crucial delay to allow the USB physical layer to stabilize
             time.sleep(1.0) 
             
-            # Flush any leftover garbage data from previous crashed runs
             ser.reset_input_buffer()
             ser.reset_output_buffer()
             
             print(f"Starting Stress Test: sending {NUM_WORDS_TO_TEST} words...\n")
             
-            # Statistics counters
             successful_responses = 0
             total_bch_corrections = 0
             total_bch_failures = 0
@@ -37,49 +32,55 @@ def main():
             start_time = time.time()
             
             for i in range(NUM_WORDS_TO_TEST):
-                # 1. Generate random data (512 bytes)
                 payload = bytearray(random.getrandbits(8) for _ in range(SEND_SIZE))
                 
                 try:
-                    # 2. Send payload to the Microcontroller
                     ser.write(payload)
                 except serial.SerialTimeoutException:
                     print(f"Write timeout at word {i}! MCU stopped listening.")
-                    break # Abort the test cleanly if the pipe clogs
+                    break 
                 
-                # 3. Read the response from the Microcontroller
                 response = ser.read(RESPONSE_SIZE)
                 
                 if len(response) == RESPONSE_SIZE:
                     successful_responses += 1
                     
-                    # 4. Extract status bytes at the end of the packet
-                    # Byte 520 is BCH status (int8_t - signed)
-                    # Byte 521 is CRC status (uint8_t - unsigned)
-                    bch_status = int.from_bytes([response[520]], byteorder='little', signed=True)
-                    crc_status = response[521]
+                    # 1. Treat the entire 520-byte codeword as one giant Little-Endian integer
+                    codeword_int = int.from_bytes(response[:520], byteorder='little')
                     
-                    # Counting logic
-                    if bch_status > 0:
-                        total_bch_corrections += bch_status # Add the number of corrected bit flips
-                    elif bch_status < 0:
-                        total_bch_failures += 1 # Negative value indicates an uncorrectable error
+                    # 2. Shift right by 58 bits (32 for CRC + 26 for BCH) to recover the payload
+                    recovered_payload_int = codeword_int >> 58
+                    received_payload = recovered_payload_int.to_bytes(512, byteorder='little')
+                    
+                    # 3. The parity is actually at the bottom 58 bits! Mask them out.
+                    raw_parity_int = codeword_int & ((1 << 58) - 1)
+                    received_parity = raw_parity_int.to_bytes(8, byteorder='little')
+                    
+                    raw_bch = response[520]
+                    raw_crc = response[521]
+                    
+                    bch_status = int.from_bytes([raw_bch], byteorder='little', signed=True)
+                    crc_status = raw_crc
+                    
+                    # --- NEW RAW DEBUG OUTPUT ---
+                    print(f"\n[Packet {i+1}]")
+                    print(f"  Sent Payload (first 16) : {payload[:16].hex(' ').upper()}")
+                    print(f"  Recv Payload (first 16) : {received_payload[:16].hex(' ').upper()}")
+                    
+                    # Exact comparison
+                    if payload == received_payload:
+                        print("  Payload Match           : YES (Exactly identical)")
+                    else:
+                        diff_count = sum(1 for a, b in zip(payload, received_payload) if a != b)
+                        print(f"  Payload Match           : NO ({diff_count} bytes differ!)")
                         
-                    if crc_status != 0:
-                        total_crc_errors += 1 # Non-zero CRC indicates a mismatch/failure
-                        
-                else:
-                    print(f"Read Timeout/Error at word {i}! Received {len(response)}/{RESPONSE_SIZE} bytes.")
-                
-                # Optional: Print a progress update every 100 words
-                if (i + 1) % 100 == 0:
-                    print(f"Progress: {i + 1}/{NUM_WORDS_TO_TEST} words tested...")
-
+                    print(f"  Extracted Parity        : {received_parity.hex(' ').upper()}")
+                    print(f"  Raw BCH Byte            : 0x{raw_bch:02X} -> Signed: {bch_status}")
+                    print(f"  Raw CRC Byte            : 0x{raw_crc:02X} -> Expected 1 (Valid) or 0 (Invalid)")
+            
             end_time = time.time()
             
-            # --- PRINT FINAL REPORT ---
             elapsed_time = end_time - start_time
-            # Calculate throughput in KB/s (Total data sent / time / 1024)
             throughput = (NUM_WORDS_TO_TEST * SEND_SIZE) / elapsed_time / 1024 
             
             print("\n" + "="*40)

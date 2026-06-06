@@ -95,6 +95,22 @@ struct BigPoly {
         res.trim();
         return res;
     }
+    BigPoly operator>>(int sh) const {
+        BigPoly res;
+        if (n == 0 || sh == 0) { res = *this; return res; }
+        int wi = sh / 64, bi = sh % 64;
+        if (wi >= n) return res;
+
+        for (int i = wi; i < n; ++i) {
+            res.w[i - wi] |= (w[i] >> bi);
+            if (bi > 0 && (i + 1) < n) {
+                res.w[i - wi] |= (w[i + 1] << (64 - bi));
+            }
+        }
+        res.n = n - wi;
+        res.trim();
+        return res;
+    }
 
     bool operator==(const BigPoly& o) const {
         if (n != o.n) return false;
@@ -409,7 +425,8 @@ int gf2_correct_errors(uint8_t* data, int length, uint8_t* crc_valid) {
     }
 
     // CRC sulla parola appena corretta
-    *crc_valid = CRC_check(corrupted) ? 1 : 0;
+    BigPoly data_for_crc = corrupted >> 26;
+    *crc_valid = CRC_check(data_for_crc) ? 1 : 0;
 
     // Se il numero di posizioni trovate != grado di lambda, il BCH ha fallito.
     int lambda_degree = lambda.len - 1;

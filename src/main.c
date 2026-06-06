@@ -17,46 +17,77 @@ extern APP_DATA appData;
 volatile uint8_t TARGET_BIT_FLIPS = 0; 
 
 // =============================================================================
-// 1. BIT-BANGING ENGINES
+// 1. BIT-BANGING ENGINES (OPTIMIZED DIRECT REGISTER ACCESS)
 // =============================================================================
 
 void NAND_WriteByte(uint8_t data) {
-    NAND_D0_OutputEnable(); NAND_D1_OutputEnable(); NAND_D2_OutputEnable(); NAND_D3_OutputEnable();
-    NAND_D4_OutputEnable(); NAND_D5_OutputEnable(); NAND_D6_OutputEnable(); NAND_D7_OutputEnable();
+    /* 1. Force pins to OUTPUT mode bypassing Harmony abstractions */
+    PIOD_REGS->PIO_OER = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
+    PIOC_REGS->PIO_OER = (1UL << 6) | (1UL << 5);
+    PIOA_REGS->PIO_OER = (1UL << 24) | (1UL << 25);
 
-    if (data & 0x01) NAND_D0_Set(); else NAND_D0_Clear();
-    if (data & 0x02) NAND_D1_Set(); else NAND_D1_Clear();
-    if (data & 0x04) NAND_D2_Set(); else NAND_D2_Clear();
-    if (data & 0x08) NAND_D3_Set(); else NAND_D3_Clear();
-    if (data & 0x10) NAND_D4_Set(); else NAND_D4_Clear();
-    if (data & 0x20) NAND_D5_Set(); else NAND_D5_Clear();
-    if (data & 0x40) NAND_D6_Set(); else NAND_D6_Clear();
-    if (data & 0x80) NAND_D7_Set(); else NAND_D7_Clear();
+    /* 2. Fast, atomic register write to set up the data pins perfectly simultaneously */
+    uint32_t pd_set = 0U, pd_clr = 0U;
+    if (data & 0x01U) pd_set |= (1UL << 25); else pd_clr |= (1UL << 25); 
+    if (data & 0x02U) pd_set |= (1UL << 26); else pd_clr |= (1UL << 26); 
+    if (data & 0x08U) pd_set |= (1UL << 24); else pd_clr |= (1UL << 24); 
+    if (data & 0x20U) pd_set |= (1UL << 23); else pd_clr |= (1UL << 23); 
+    if (pd_set) PIOD_REGS->PIO_SODR = pd_set;
+    if (pd_clr) PIOD_REGS->PIO_CODR = pd_clr;
 
+    uint32_t pc_set = 0U, pc_clr = 0U;
+    if (data & 0x04U) pc_set |= (1UL << 6);  else pc_clr |= (1UL << 6);  
+    if (data & 0x40U) pc_set |= (1UL << 5);  else pc_clr |= (1UL << 5);  
+    if (pc_set) PIOC_REGS->PIO_SODR = pc_set;
+    if (pc_clr) PIOC_REGS->PIO_CODR = pc_clr;
+
+    uint32_t pa_set = 0U, pa_clr = 0U;
+    if (data & 0x10U) pa_set |= (1UL << 24); else pa_clr |= (1UL << 24); 
+    if (data & 0x80U) pa_set |= (1UL << 25); else pa_clr |= (1UL << 25); 
+    if (pa_set) PIOA_REGS->PIO_SODR = pa_set;
+    if (pa_clr) PIOA_REGS->PIO_CODR = pa_clr;
+
+    /* 3. Toggle WE# with proper timing delays */
     NAND_WE_Clear(); 
-    asm("nop"); asm("nop"); 
+    /* ~100ns delay: Give NAND time to register the write pulse */
+    for(volatile int d = 0; d < 15; d++); 
     NAND_WE_Set();
+    /* ~30ns delay: Write recovery / Hold time */
+    for(volatile int d = 0; d < 5; d++);  
 }
 
 uint8_t NAND_ReadByte(void) {
     uint8_t data = 0;
 
-    NAND_D0_InputEnable(); NAND_D1_InputEnable(); NAND_D2_InputEnable(); NAND_D3_InputEnable();
-    NAND_D4_InputEnable(); NAND_D5_InputEnable(); NAND_D6_InputEnable(); NAND_D7_InputEnable();
+    /* 1. Force pins to INPUT mode bypassing Harmony abstractions */
+    PIOD_REGS->PIO_ODR = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
+    PIOC_REGS->PIO_ODR = (1UL << 6) | (1UL << 5);
+    PIOA_REGS->PIO_ODR = (1UL << 24) | (1UL << 25);
 
+    /* 2. Pull OE# LOW and wait for NAND to drive the data bus */
     NAND_OE_Clear();
-    asm("nop"); asm("nop"); 
+    /* ~100ns delay: Give NAND time to fetch the byte and push it to the pins */
+    for(volatile int d = 0; d < 15; d++); 
 
-    if (NAND_D0_Get()) data |= 0x01;
-    if (NAND_D1_Get()) data |= 0x02;
-    if (NAND_D2_Get()) data |= 0x04;
-    if (NAND_D3_Get()) data |= 0x08;
-    if (NAND_D4_Get()) data |= 0x10;
-    if (NAND_D5_Get()) data |= 0x20;
-    if (NAND_D6_Get()) data |= 0x40;
-    if (NAND_D7_Get()) data |= 0x80;
+    /* 3. Directly sample the physical pin states (PIO_PDSR) instead of the output latch */
+    uint32_t pd = PIOD_REGS->PIO_PDSR;
+    uint32_t pc = PIOC_REGS->PIO_PDSR;
+    uint32_t pa = PIOA_REGS->PIO_PDSR;
 
+    if (pd & (1UL << 25)) data |= 0x01U; 
+    if (pd & (1UL << 26)) data |= 0x02U; 
+    if (pc & (1UL << 6))  data |= 0x04U; 
+    if (pd & (1UL << 24)) data |= 0x08U; 
+    if (pa & (1UL << 24)) data |= 0x10U; 
+    if (pd & (1UL << 23)) data |= 0x20U; 
+    if (pc & (1UL << 5))  data |= 0x40U; 
+    if (pa & (1UL << 25)) data |= 0x80U; 
+
+    /* 4. Pull OE# HIGH and wait before next cycle */
     NAND_OE_Set();
+    /* ~30ns delay: Read recovery time before next cycle */
+    for(volatile int d = 0; d < 5; d++); 
+    
     return data;
 }
 
@@ -82,8 +113,37 @@ void NAND_Address(uint8_t addr) {
 // 3. HARDWARE NAND DRIVERS 
 // =============================================================================
 
+void HW_NAND_Wait_Ready(void) {
+    /* 1. tWB Delay: Wait ~2 microseconds for NAND to pull R/B# LOW */
+    for(volatile uint32_t d = 0; d < 1000; d++) { asm("nop"); }
+    
+    /* 2. Now wait for the flash to finish and release the R/B# line HIGH */
+    while(F3_RB_Get() == 0) {}
+    
+    /* 3. tRR Delay: Wait ~50ns after it goes high before dropping RE# */
+    for(volatile uint32_t d = 0; d < 50; d++) { asm("nop"); }
+}
+
+void HW_NAND_Erase_Block(uint32_t block_address) {
+    CE_F3_Clear();
+    
+    NAND_Command(0x60); // Block Erase Setup command
+    
+    /* Calculate the row address for the block (assuming 256 pages per block) */
+    uint32_t row = (block_address << 8); 
+    
+    NAND_Address(row & 0xFF);         
+    NAND_Address((row >> 8) & 0xFF);  
+    NAND_Address((row >> 16) & 0xFF); 
+    
+    NAND_Command(0xD0); // Block Erase Confirm command
+    
+    HW_NAND_Wait_Ready(); 
+    CE_F3_Set();
+}
+
 void HW_NAND_Write_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity) {
-    CE_F1_Clear(); 
+    CE_F3_Clear(); 
     NAND_Command(0x80); 
 
     NAND_Address(0x00); 
@@ -105,12 +165,12 @@ void HW_NAND_Write_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* pa
     }
 
     NAND_Command(0x10); 
-    while(F1_RB_Get() == 0) {} 
-    CE_F1_Set(); 
+    HW_NAND_Wait_Ready(); 
+    CE_F3_Set(); 
 }
 
 void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity) {
-    CE_F1_Clear(); 
+    CE_F3_Clear(); 
     NAND_Command(0x00); 
 
     NAND_Address(0x00); 
@@ -120,7 +180,7 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     NAND_Address((page_address >> 16) & 0xFF); 
 
     NAND_Command(0x30); 
-    while(F1_RB_Get() == 0) {} 
+    HW_NAND_Wait_Ready(); 
 
     for(uint32_t i = 0; i < PAYLOAD_SIZE_BYTES; i++) {
         payload[i] = NAND_ReadByte();
@@ -131,13 +191,13 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     NAND_Address(0x10); 
     NAND_Command(0xE0); 
 
-    while(F1_RB_Get() == 0) {} 
+    HW_NAND_Wait_Ready(); 
 
     for(uint32_t i = 0; i < PARITY_SIZE_BYTES; i++) {
         parity[i] = NAND_ReadByte();
     }
 
-    CE_F1_Set();
+    CE_F3_Set();
 }
 
 // =============================================================================
@@ -149,6 +209,7 @@ uint8_t CACHE_ALIGN tx_buffer[CODEWORD_SIZE_BYTES + 2];
 uint8_t codeword_buffer[CODEWORD_SIZE_BYTES];
 uint8_t flash_read_buffer[CODEWORD_SIZE_BYTES];
 uint32_t current_nand_page = 0x00000000; 
+bool block_erased = false; // NEW: Track if we've formatted the test block
 
 void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips) {
     if (num_flips == 0) return;
@@ -215,11 +276,20 @@ int main ( void )
                     break;
 
                 case PROCESS_DATA:
+                    /* Format the block before the very first write */
+                    if (!block_erased) {
+                        HW_NAND_Erase_Block(0); // Erase Block 0
+                        block_erased = true;
+                    }
+
                     gf2_encode_data(rx_buffer, PAYLOAD_SIZE_BYTES, codeword_buffer);
                     inject_errors(codeword_buffer, CODEWORD_SIZE_BYTES, TARGET_BIT_FLIPS);
 
                     HW_NAND_Write_Codeword(current_nand_page, codeword_buffer, &codeword_buffer[PAYLOAD_SIZE_BYTES]);
                     HW_NAND_Read_Codeword(current_nand_page, flash_read_buffer, &flash_read_buffer[PAYLOAD_SIZE_BYTES]);
+
+                    /* Move to the next page in the block for the next packet! */
+                    current_nand_page++; 
 
                     uint8_t crc_status = 0;
                     int bch_status = gf2_correct_errors(flash_read_buffer, CODEWORD_SIZE_BYTES, &crc_status);
