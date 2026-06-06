@@ -52,9 +52,9 @@
 /* MISRA C-2012 Rule 10.3 deviated:4 Deviation record ID -  H3_USB_MISRAC_2012_R_10_3_DR_1 */
 static const USB_DEVICE_CDC_INIT cdcInit0 =
 {
-    .queueSizeRead = 1024,
-    .queueSizeWrite = 1024,
-    .queueSizeSerialStateNotification = 1024
+    .queueSizeRead = 2048,
+    .queueSizeWrite = 2048,
+    .queueSizeSerialStateNotification = 2048
 };
 /* MISRAC 2012 deviation block end */   
 
