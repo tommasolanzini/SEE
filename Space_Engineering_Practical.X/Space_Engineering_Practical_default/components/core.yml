@@ -6160,7 +6160,7 @@ data:
       - children:
         - attributes:
             id: core
-            value: '7168'
+            value: '134220800'
           type: Dynamic
         type: Values
       type: Hex
@@ -7702,7 +7702,7 @@ data:
       children:
       - children:
         - attributes:
-            value: High
+            value: ''
           type: User
         type: Values
       type: String
@@ -7803,6 +7803,26 @@ data:
       - children:
         - attributes:
             value: ''
+          type: User
+        type: Values
+      type: String
+    PIN_70_LAT:
+      attributes:
+        id: PIN_70_LAT
+      children:
+      - children:
+        - attributes:
+            value: High
+          type: User
+        type: Values
+      type: String
+    I2S1_CLOCK_FREQUENCY:
+      attributes:
+        id: I2S1_CLOCK_FREQUENCY
+      children:
+      - children:
+        - attributes:
+            value: '32768'
           type: User
         type: Values
       type: String

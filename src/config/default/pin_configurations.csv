@@ -55,9 +55,9 @@
 65,PD20,CE_F1,GPIO,Out,High,No,Disabled,No,No,Disabled,Low
 66,PA10,NAND_OE,GPIO,Out,High,No,Disabled,No,No,Disabled,Low
 67,PD19,NAND_WE,GPIO,Out,High,No,Disabled,No,No,Disabled,Low
-68,PA12,NAND_CLE,GPIO,Out,High,No,Disabled,No,No,Disabled,Low
+68,PA12,NAND_CLE,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
 69,PD18,NAND_ALE,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
-70,PA27,NAND_WP,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
+70,PA27,NAND_WP,GPIO,Out,High,No,Disabled,No,No,Disabled,Low
 71,PD28,,Available,In,,,,,,,
 73,PA5,,Available,In,,,,,,,
 74,PD17,,Available,In,,,,,,,
