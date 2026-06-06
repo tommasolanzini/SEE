@@ -26,7 +26,7 @@ void NAND_WriteByte(uint8_t data) {
     PIOC_REGS->PIO_OER = (1UL << 6) | (1UL << 5);
     PIOA_REGS->PIO_OER = (1UL << 24) | (1UL << 25);
 
-    /* 2. Fast, atomic register write to set up the data pins perfectly simultaneously */
+    /* 2. Fast, atomic register write */
     uint32_t pd_set = 0U, pd_clr = 0U;
     if (data & 0x01U) pd_set |= (1UL << 25); else pd_clr |= (1UL << 25); 
     if (data & 0x02U) pd_set |= (1UL << 26); else pd_clr |= (1UL << 26); 
@@ -47,29 +47,28 @@ void NAND_WriteByte(uint8_t data) {
     if (pa_set) PIOA_REGS->PIO_SODR = pa_set;
     if (pa_clr) PIOA_REGS->PIO_CODR = pa_clr;
 
-    /* 3. Toggle WE# with proper timing delays */
+    /* 3. Toggle WE# con protezione interrupt */
+    __disable_irq();
     NAND_WE_Clear(); 
-    /* ~100ns delay: Give NAND time to register the write pulse */
-    for(volatile int d = 0; d < 15; d++); 
+    for(volatile int d = 0; d < 30; d++); 
     NAND_WE_Set();
-    /* ~30ns delay: Write recovery / Hold time */
-    for(volatile int d = 0; d < 5; d++);  
+    for(volatile int d = 0; d < 10; d++);  
+    __enable_irq();
 }
 
 uint8_t NAND_ReadByte(void) {
     uint8_t data = 0;
 
-    /* 1. Force pins to INPUT mode bypassing Harmony abstractions */
+    /* 1. Force pins to INPUT mode */
     PIOD_REGS->PIO_ODR = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
     PIOC_REGS->PIO_ODR = (1UL << 6) | (1UL << 5);
     PIOA_REGS->PIO_ODR = (1UL << 24) | (1UL << 25);
 
-    /* 2. Pull OE# LOW and wait for NAND to drive the data bus */
+    /* 2. Pull OE# LOW e blinda interrupt */
+    __disable_irq();
     NAND_OE_Clear();
-    /* ~100ns delay: Give NAND time to fetch the byte and push it to the pins */
-    for(volatile int d = 0; d < 15; d++); 
+    for(volatile int d = 0; d < 30; d++); 
 
-    /* 3. Directly sample the physical pin states (PIO_PDSR) instead of the output latch */
     uint32_t pd = PIOD_REGS->PIO_PDSR;
     uint32_t pc = PIOC_REGS->PIO_PDSR;
     uint32_t pa = PIOA_REGS->PIO_PDSR;
@@ -83,10 +82,9 @@ uint8_t NAND_ReadByte(void) {
     if (pc & (1UL << 5))  data |= 0x40U; 
     if (pa & (1UL << 25)) data |= 0x80U; 
 
-    /* 4. Pull OE# HIGH and wait before next cycle */
     NAND_OE_Set();
-    /* ~30ns delay: Read recovery time before next cycle */
-    for(volatile int d = 0; d < 5; d++); 
+    for(volatile int d = 0; d < 10; d++); 
+    __enable_irq();
     
     return data;
 }
@@ -235,6 +233,14 @@ int main ( void )
 {
     /* Initialize all modules */
     SYS_Initialize ( NULL );
+    
+    PMC_REGS->PMC_PCER0 = (1UL << 11);
+    PIOB_REGS->PIO_WPMR = (0x50494FUL << 8);
+    PIOB_REGS->PIO_OER = (1UL << 1);
+    PIOB_REGS->PIO_SODR = (1UL << 1);
+    for(volatile int d = 0; d < 100000; d++) { asm("nop"); }
+    NAND_Command(0xFF);
+    HW_NAND_Wait_Ready();
 
     srand(12345);
     gf2_initialize();
