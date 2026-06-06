@@ -175,26 +175,15 @@ int main ( void )
     /* Initialize all modules */
     SYS_Initialize ( NULL );
 
-    srand(12345); 
-    gf2_initialize(); 
+    srand(12345);
+    gf2_initialize();
 
-    enum { 
-        WAIT_FOR_READ_TRIGGER, 
-        WAIT_FOR_READ_COMPLETE, 
-        PROCESS_DATA, 
-        SEND_MESSAGE, 
-        WAIT_FOR_WRITE_COMPLETE 
-    } customState = WAIT_FOR_READ_TRIGGER;
-
-    srand(12345); 
-    gf2_initialize(); 
-
-    enum { 
-        WAIT_FOR_READ_TRIGGER, 
-        WAIT_FOR_READ_COMPLETE, 
-        PROCESS_DATA, 
-        SEND_MESSAGE, 
-        WAIT_FOR_WRITE_COMPLETE 
+    enum {
+        WAIT_FOR_READ_TRIGGER,
+        WAIT_FOR_READ_COMPLETE,
+        PROCESS_DATA,
+        SEND_MESSAGE,
+        WAIT_FOR_WRITE_COMPLETE
     } customState = WAIT_FOR_READ_TRIGGER;
 
     while ( true )
@@ -202,9 +191,9 @@ int main ( void )
         /* Maintain state machines of all polled MPLAB Harmony modules. */
         SYS_Tasks ( );
 
-        /* Let app.c handle the physical USB connection to Windows. 
+        /* Let app.c handle the physical USB connection to Windows.
            Once it successfully configures the COM ports, we hijack the data flow. */
-        if (appData.isConfigured == true) 
+        if (appData.isConfigured == true)
         {
             /* FREEZE APP.C: We force app.c's background task into an error state.
                This prevents it from stealing our USB payload, but leaves its safe
@@ -213,7 +202,6 @@ int main ( void )
 
             switch(customState) {
                 case WAIT_FOR_READ_TRIGGER:
-                    // Reset the event flag, then ask app.c's driver to queue a read
                     appData.appCOMPortObjects[0].isReadComplete = false;
                     if (USB_DEVICE_CDC_Read(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].readTransferHandle, rx_buffer, PAYLOAD_SIZE_BYTES) == USB_DEVICE_CDC_RESULT_OK) {
                         customState = WAIT_FOR_READ_COMPLETE;
@@ -221,7 +209,6 @@ int main ( void )
                     break;
 
                 case WAIT_FOR_READ_COMPLETE:
-                    // app.c's background interrupt handler will flip this to true when Python sends the data
                     if (appData.appCOMPortObjects[0].isReadComplete) {
                         customState = PROCESS_DATA;
                     }
@@ -247,7 +234,6 @@ int main ( void )
                     break;
 
                 case SEND_MESSAGE:
-                    // Reset the event flag, then queue the write back to Python
                     appData.appCOMPortObjects[0].isWriteComplete = false;
                     if (USB_DEVICE_CDC_Write(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].writeTransferHandle, tx_buffer, CODEWORD_SIZE_BYTES + 2, USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE) == USB_DEVICE_CDC_RESULT_OK) {
                         customState = WAIT_FOR_WRITE_COMPLETE;
@@ -255,68 +241,6 @@ int main ( void )
                     break;
 
                 case WAIT_FOR_WRITE_COMPLETE:
-                    // Wait for app.c's interrupt handler to confirm Windows received the data
-                    if (appData.appCOMPortObjects[0].isWriteComplete) {
-                        customState = WAIT_FOR_READ_TRIGGER;
-                    }
-                    break;
-            }
-        }
-
-        /* Let app.c handle the physical USB connection to Windows. 
-           Once it successfully configures the COM ports, we hijack the data flow. */
-        if (appData.isConfigured == true) 
-        {
-            /* FREEZE APP.C: We force app.c's background task into an error state.
-               This prevents it from stealing our USB payload, but leaves its safe
-               Windows kernel handlers perfectly intact! */
-            appData.state = APP_STATE_ERROR;
-
-            switch(customState) {
-                case WAIT_FOR_READ_TRIGGER:
-                    // Reset the event flag, then ask app.c's driver to queue a read
-                    appData.appCOMPortObjects[0].isReadComplete = false;
-                    if (USB_DEVICE_CDC_Read(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].readTransferHandle, rx_buffer, PAYLOAD_SIZE_BYTES) == USB_DEVICE_CDC_RESULT_OK) {
-                        customState = WAIT_FOR_READ_COMPLETE;
-                    }
-                    break;
-
-                case WAIT_FOR_READ_COMPLETE:
-                    // app.c's background interrupt handler will flip this to true when Python sends the data
-                    if (appData.appCOMPortObjects[0].isReadComplete) {
-                        customState = PROCESS_DATA;
-                    }
-                    break;
-
-                case PROCESS_DATA:
-                    gf2_encode_data(rx_buffer, PAYLOAD_SIZE_BYTES, codeword_buffer);
-                    inject_errors(codeword_buffer, CODEWORD_SIZE_BYTES, TARGET_BIT_FLIPS);
-
-                    HW_NAND_Write_Codeword(current_nand_page, codeword_buffer, &codeword_buffer[PAYLOAD_SIZE_BYTES]);
-                    HW_NAND_Read_Codeword(current_nand_page, flash_read_buffer, &flash_read_buffer[PAYLOAD_SIZE_BYTES]);
-
-                    uint8_t crc_status = 0;
-                    int bch_status = gf2_correct_errors(flash_read_buffer, CODEWORD_SIZE_BYTES, &crc_status);
-
-                    for(int i = 0; i < CODEWORD_SIZE_BYTES; i++) {
-                        tx_buffer[i] = flash_read_buffer[i];
-                    }
-                    tx_buffer[CODEWORD_SIZE_BYTES]     = (uint8_t)bch_status; 
-                    tx_buffer[CODEWORD_SIZE_BYTES + 1] = crc_status;
-                    
-                    customState = SEND_MESSAGE;
-                    break;
-
-                case SEND_MESSAGE:
-                    // Reset the event flag, then queue the write back to Python
-                    appData.appCOMPortObjects[0].isWriteComplete = false;
-                    if (USB_DEVICE_CDC_Write(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].writeTransferHandle, tx_buffer, CODEWORD_SIZE_BYTES + 2, USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE) == USB_DEVICE_CDC_RESULT_OK) {
-                        customState = WAIT_FOR_WRITE_COMPLETE;
-                    }
-                    break;
-
-                case WAIT_FOR_WRITE_COMPLETE:
-                    // Wait for app.c's interrupt handler to confirm Windows received the data
                     if (appData.appCOMPortObjects[0].isWriteComplete) {
                         customState = WAIT_FOR_READ_TRIGGER;
                     }
