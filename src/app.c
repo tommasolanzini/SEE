@@ -63,7 +63,7 @@
 // Loop counts are conservative for a 300 MHz ATSAMV71Q21B (one loop ≈ 3–4 ns).
 // Increase if you clock the core higher or if the compiler optimises the loops.
 // *****************************************************************************
-#define DELAY_NS(ns)   do { for (volatile uint32_t _d = 0; _d < ((ns)/4U + 1U); _d++) {} } while(0)
+//#define DELAY_NS(ns)   do { for (volatile uint32_t _d = 0; _d < ((ns)/16U + 1U); _d++) {} } while(0)
 
 /* Key datasheet minimums (asynchronous mode 0, tRC/tWC = 100 ns) */
 #define tCS_NS      70U   /* CE# setup before WE#/RE# falls         */
@@ -95,6 +95,15 @@
 /* NAND status bits */
 #define NAND_SR_FAIL          (1U << 0)
 #define NAND_SR_READY         (1U << 6)
+
+/* ── SysTick-based microsecond timer ────────────────────────────────────────
+   SysTick counts DOWN from SysTick->LOAD to 0 at the CPU clock rate.
+   At 300 MHz, one tick = 3.333 ns.  We capture the raw tick count and
+   convert to nanoseconds on the way out.
+   NOTE: This wraps after ~14.3 seconds (24-bit counter at 300 MHz).
+   For the sub-millisecond intervals measured here that is fine.          */
+
+#define CPU_FREQ_HZ     300000000UL   /* adjust if your clock differs     */
 
 // *****************************************************************************
 // Global application data
@@ -130,6 +139,51 @@ static uint16_t   com2SendOffset  = 0;
 static uint16_t   com1WriteOffset = 0;
 static uint16_t   com1SendOffset  = 0;
 static uint8_t    nandWriteBuf[COM2_WRITE_LEN];
+
+static inline void DELAY_NS(uint32_t ns)
+{
+    /* Convert requested nanoseconds to ticks, rounding up */
+    uint32_t ticks = (uint32_t)(((uint64_t)ns * CPU_FREQ_HZ + 999999999ULL)
+                                / 1000000000ULL);
+
+    /* Cap to 24-bit counter range (one wrap = ~14.3 s at 300 MHz) */
+    if (ticks > SysTick->LOAD)
+        ticks = SysTick->LOAD;
+
+    uint32_t tStart = SysTick->VAL;
+
+    /* SysTick counts DOWN, so elapsed = tStart - VAL (with wrap handling) */
+    while (true)
+    {
+        uint32_t tNow = SysTick->VAL;
+        uint32_t elapsed = (tStart >= tNow)
+                           ? (tStart - tNow)
+                           : (SysTick->LOAD + 1U - tNow + tStart);
+        if (elapsed >= ticks)
+            break;
+    }
+}
+
+static inline uint32_t TIMER_GetTicks(void)
+{
+    /* SysTick->VAL is the current DOWN-counter value (24-bit)            */
+    return SysTick->VAL;
+}
+
+/* Returns elapsed nanoseconds between a start and end tick capture.
+   Handles the single wrap (end > start because counter counts down).     */
+static inline uint32_t TIMER_ElapsedNs(uint32_t startTicks, uint32_t endTicks)
+{
+    uint32_t elapsed;
+    if (startTicks >= endTicks)
+        elapsed = startTicks - endTicks;          /* normal: no wrap      */
+    else
+        elapsed = (SysTick->LOAD + 1U) - endTicks + startTicks; /* wrapped */
+
+    /* ticks × (1 000 000 000 / CPU_FREQ_HZ)
+       Multiply first to keep precision; safe because elapsed fits 24 bits */
+    return (uint32_t)(((uint64_t)elapsed * 1000000000ULL) / CPU_FREQ_HZ);
+}
 
 
 // *****************************************************************************
@@ -783,6 +837,10 @@ static void COM1_ProcessByte(uint8_t byte)
         case COM1_IDLE:
             if (byte == (uint8_t)'1')
             {
+                LE_F3_OutputEnable();
+                LE_F3_Set();
+                DELAY_NS(100000);
+                
                 SEL_F3_OutputEnable();
                 SEL_F3_Set();
                 DELAY_NS(1000);
@@ -791,31 +849,46 @@ static void COM1_ProcessByte(uint8_t byte)
                 SEL_F2_Set();
                 DELAY_NS(10000);
                 SEL_F2_Clear();
+                
+                DELAY_NS(100000);
+                LE_F3_Clear();
                 COM1_SendString("1 SEL event triggered");
             }
-            else if (byte == (uint8_t)'r' || byte == (uint8_t)'R')
+            else if (byte >= (uint8_t)'1' && byte <= (uint8_t)'9')
             {
-                bool ok = NAND_ReadPage(0U, 0U, nandPageBuf);
-                if (ok)
+                uint8_t n = byte - 0x30;
+                uint32_t times[9];
+                LE_F3_OutputEnable();
+                SEL_F3_OutputEnable();
+                AMP_OUT3_InputEnable();
+                
+                for(volatile uint8_t i = 0; i < n; i++)
                 {
-                    com1SendOffset = 0U;
-                    com1State = COM1_SEND_READ;
-                    /* Send the first chunk; subsequent chunks are driven by
-                       the isWriteComplete flag in APP_Tasks. */
-                    uint16_t chunk = (NAND_PAGE_TOTAL < (uint32_t)APP_READ_BUFFER_SIZE)
-                                     ? (uint16_t)NAND_PAGE_TOTAL
-                                     : (uint16_t)APP_READ_BUFFER_SIZE;
-                    memcpy(com2WriteBuffer, nandPageBuf, chunk);
-                    com1SendOffset = chunk;
-                    appData.appCOMPortObjects[COM1].isWriteComplete = false;
-                    USB_DEVICE_CDC_Write(COM1,
-                            &appData.appCOMPortObjects[COM1].writeTransferHandle,
-                            com1WriteBuffer, chunk,
-                            USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE);
+                    LE_F3_Set();
+                    DELAY_NS(20000);
+                    
+                    uint32_t tStart = SysTick->VAL;
+                    SEL_F3_Set();
+                    uint32_t tEnd = SysTick->VAL;
+                    times[i] = TIMER_ElapsedNs(tStart, tEnd);
+                    //while (!AMP_OUT3_Get());
+                    //while (AMP_OUT3_Get());
+
+                    DELAY_NS(20000);
+                    SEL_F3_Clear();
+                    
+                
+                    DELAY_NS(100000);
+                    LE_F3_Clear();
+                    DELAY_NS(5000);
                 }
-                else
+                char msg[32];
+                sprintf(msg, "%01d SEL events triggered", n);
+                COM1_SendString(msg);
+                for (volatile uint8_t i = 0; i < n; i++)
                 {
-                    COM1_SendString("ERR:READ\r\n");
+                    sprintf(msg, "Time %01d: %06d ns", i, times[i]);
+                    COM1_SendString(msg);
                 }
             }
             else if (byte == (uint8_t)'e' || byte == (uint8_t)'E')

@@ -15,7 +15,7 @@
 18,PC15,,Available,In,,,,,,,
 19,PC13,LE_F3,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
 20,PB1,F3V3_F3,GPIO,In,n/a,No,Disabled,No,No,Disabled,Low
-21,PB0,SEL_F3,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
+21,PB0,SEL_F3,GPIO,Out,Low,No,Disabled,No,No,Disabled,High
 22,PA20,AMP_OUT3,AFEC0_AD9,n/a,n/a,No,Disabled,No,No,Disabled,Low
 23,PA19,AMP_OUT2,AFEC0_AD8,n/a,n/a,No,Disabled,No,No,Disabled,Low
 24,PA18,AMP_OUT1,AFEC0_AD7,n/a,n/a,No,Disabled,No,No,Disabled,Low
@@ -34,7 +34,7 @@
 40,PC3,F1_RB,GPIO,In,n/a,No,Disabled,No,No,Disabled,Low
 41,PC4,,Available,In,,,,,,,
 42,PA13,,Available,In,,,,,,,
-45,PA16,SEL_F2,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
+45,PA16,SEL_F2,GPIO,Out,Low,No,Disabled,No,No,Disabled,High
 46,PA23,SEL_F1,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
 47,PD27,LE_F1,GPIO,Out,Low,No,Disabled,No,No,Disabled,Low
 48,PC7,F3V3_F1,GPIO,In,n/a,No,Disabled,No,No,Disabled,Low

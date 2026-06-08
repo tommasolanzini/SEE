@@ -7190,7 +7190,7 @@ data:
       - children:
         - attributes:
             id: core
-            value: '0'
+            value: '1'
           type: Dynamic
         type: Values
       type: Hex
@@ -7200,7 +7200,7 @@ data:
       children:
       - children:
         - attributes:
-            value: ''
+            value: High
           type: User
         type: Values
       type: String
@@ -7823,6 +7823,27 @@ data:
       - children:
         - attributes:
             value: '32768'
+          type: User
+        type: Values
+      type: String
+    PIOA_DRIVER_VALUE:
+      attributes:
+        id: PIOA_DRIVER_VALUE
+      children:
+      - children:
+        - attributes:
+            id: core
+            value: '65536'
+          type: Dynamic
+        type: Values
+      type: Hex
+    PIN_45_DRIVER:
+      attributes:
+        id: PIN_45_DRIVER
+      children:
+      - children:
+        - attributes:
+            value: High
           type: User
         type: Values
       type: String
