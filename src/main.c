@@ -250,7 +250,8 @@ int main ( void )
         WAIT_FOR_READ_COMPLETE,
         PROCESS_DATA,
         SEND_MESSAGE,
-        WAIT_FOR_WRITE_COMPLETE
+        WAIT_FOR_WRITE_COMPLETE,
+        SEL_TEST                //for using app.c
     } customState = WAIT_FOR_READ_TRIGGER;
 
     while ( true )
@@ -262,10 +263,15 @@ int main ( void )
            Once it successfully configures the COM ports, we hijack the data flow. */
         if (appData.isConfigured == true)
         {
+            customState = SEL_TEST;   //comment out to use main.c and freeze app.c
+            
             /* FREEZE APP.C: We force app.c's background task into an error state.
                This prevents it from stealing our USB payload, but leaves its safe
                Windows kernel handlers perfectly intact! */
-            appData.state = APP_STATE_ERROR;
+            if(customState != SEL_TEST)
+            {
+                appData.state = APP_STATE_ERROR;
+            }
 
             switch(customState) {
                 case WAIT_FOR_READ_TRIGGER:
@@ -320,6 +326,8 @@ int main ( void )
                     if (appData.appCOMPortObjects[0].isWriteComplete) {
                         customState = WAIT_FOR_READ_TRIGGER;
                     }
+                    break;
+                case SEL_TEST:
                     break;
             }
         }

@@ -90,6 +90,7 @@
 
 /* COM2 write payload size */
 #define COM2_WRITE_LEN        32U
+#define COM1_WRITE_LEN        32U
 
 /* NAND status bits */
 #define NAND_SR_FAIL          (1U << 0)
@@ -116,9 +117,18 @@ typedef enum {
     COM2_SEND_READ,      /* Streaming page data back to host       */
 } COM2_STATE;
 
+typedef enum {
+    COM1_IDLE,           /* Waiting for 'w', 'r', or 'e'          */
+    COM1_COLLECT_WRITE,  /* Accumulating 32 bytes for page write   */
+    COM1_SEND_READ,      /* Streaming page data back to host       */
+} COM1_STATE;
+
 static COM2_STATE com2State       = COM2_IDLE;
+static COM1_STATE com1State       = COM1_IDLE;
 static uint16_t   com2WriteOffset = 0;
 static uint16_t   com2SendOffset  = 0;
+static uint16_t   com1WriteOffset = 0;
+static uint16_t   com1SendOffset  = 0;
 static uint8_t    nandWriteBuf[COM2_WRITE_LEN];
 
 
@@ -650,6 +660,7 @@ static void APP_StateReset(void)
     appData.appCOMPortObjects[COM2].isReadComplete  = false;
     appData.appCOMPortObjects[COM2].isWriteComplete = false;
     com2State       = COM2_IDLE;
+    com1State       = COM1_IDLE;
     com2WriteOffset = 0U;
     com2SendOffset  = 0U;
 }
@@ -665,6 +676,19 @@ static void COM2_SendString(const char *str)
     USB_DEVICE_CDC_Write(COM2,
             &appData.appCOMPortObjects[COM2].writeTransferHandle,
             com2WriteBuffer, len,
+            USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE);
+}
+
+static void COM1_SendString(const char *str)
+{
+    uint16_t len = (uint16_t)strlen(str);
+    if (len > APP_READ_BUFFER_SIZE)
+        len = APP_READ_BUFFER_SIZE;
+    memcpy(com1WriteBuffer, str, len);
+    appData.appCOMPortObjects[COM1].isWriteComplete = false;
+    USB_DEVICE_CDC_Write(COM1,
+            &appData.appCOMPortObjects[COM1].writeTransferHandle,
+            com1WriteBuffer, len,
             USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE);
 }
 
@@ -751,6 +775,91 @@ static void COM2_ProcessByte(uint8_t byte)
     }
 }
 
+static void COM1_ProcessByte(uint8_t byte)
+{
+    switch (com1State)
+    {
+        /* ── IDLE: decode command character ── */
+        case COM1_IDLE:
+            if (byte == (uint8_t)'1')
+            {
+                SEL_F3_OutputEnable();
+                SEL_F3_Set();
+                DELAY_NS(1000);
+                SEL_F3_Clear();
+                SEL_F2_OutputEnable();
+                SEL_F2_Set();
+                DELAY_NS(10000);
+                SEL_F2_Clear();
+                COM1_SendString("1 SEL event triggered");
+            }
+            else if (byte == (uint8_t)'r' || byte == (uint8_t)'R')
+            {
+                bool ok = NAND_ReadPage(0U, 0U, nandPageBuf);
+                if (ok)
+                {
+                    com1SendOffset = 0U;
+                    com1State = COM1_SEND_READ;
+                    /* Send the first chunk; subsequent chunks are driven by
+                       the isWriteComplete flag in APP_Tasks. */
+                    uint16_t chunk = (NAND_PAGE_TOTAL < (uint32_t)APP_READ_BUFFER_SIZE)
+                                     ? (uint16_t)NAND_PAGE_TOTAL
+                                     : (uint16_t)APP_READ_BUFFER_SIZE;
+                    memcpy(com2WriteBuffer, nandPageBuf, chunk);
+                    com1SendOffset = chunk;
+                    appData.appCOMPortObjects[COM1].isWriteComplete = false;
+                    USB_DEVICE_CDC_Write(COM1,
+                            &appData.appCOMPortObjects[COM1].writeTransferHandle,
+                            com1WriteBuffer, chunk,
+                            USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE);
+                }
+                else
+                {
+                    COM1_SendString("ERR:READ\r\n");
+                }
+            }
+            else if (byte == (uint8_t)'e' || byte == (uint8_t)'E')
+            {
+                bool ok = NAND_EraseBlock(0U);
+                COM1_SendString(ok ? "OK:ERASE\r\n" : "ERR:ERASE\r\n");
+            }
+            else if (byte == (uint8_t)'i' || byte == (uint8_t)'I')
+            {
+                NAND_Select();
+                NAND_WriteCmd(0x90U);  /* Read ID Command */
+                NAND_WriteAddr(0x00U); /* Address 00h */
+                
+                DELAY_NS(1000); /* Give it plenty of time */
+    
+                NAND_BusInputEnable();
+                uint8_t id1 = NAND_ReadDataByte();
+                uint8_t id2 = NAND_ReadDataByte();
+                NAND_Deselect();
+                
+                char msg[32];
+                /* Micron MT29F32G08CBACA should return 0x2C 0x68 */
+                sprintf(msg, "ID: %02X %02X\r\n", id1, id2);
+                COM1_SendString(msg);
+            }
+            break;
+
+        /* ── COLLECT_WRITE: gather 32 bytes then write ── */
+        case COM1_COLLECT_WRITE:
+            nandWriteBuf[com1WriteOffset++] = byte;
+            if (com1WriteOffset >= COM1_WRITE_LEN)
+            {
+                bool ok = NAND_WritePage(0U, 0U, nandWriteBuf, COM1_WRITE_LEN);
+                COM1_SendString(ok ? "OK:WRITE\r\n" : "ERR:WRITE\r\n");
+                com1State = COM1_IDLE;
+            }
+            break;
+
+        /* ── SEND_READ: ignore input while streaming ── */
+        case COM1_SEND_READ:
+            break;
+    }
+}
+
 
 // *****************************************************************************
 // ── Initialization ───────────────────────────────────────────────────────────
@@ -783,8 +892,11 @@ void APP_Initialize(void)
     }
 
     com2State       = COM2_IDLE;
+    com1State       = COM1_IDLE;
     com2WriteOffset = 0U;
-    com2SendOffset  = 0U;
+    com2SendOffset  = 0U;    
+    com1WriteOffset = 0U;
+    com1SendOffset  = 0U;
 
     /* Initialise control lines to idle state before reset */
     CE_F3_Set();         /* CE# deasserted (high) */
@@ -859,14 +971,26 @@ void APP_Tasks(void)
             /* COM1 – loopback: echo received bytes straight back */
             if (appData.appCOMPortObjects[COM1].isReadComplete)
             {
-                appData.appCOMPortObjects[COM1].isReadComplete  = false;
-                appData.appCOMPortObjects[COM1].isWriteComplete = false;
+                appData.appCOMPortObjects[COM1].isReadComplete = false;
 
-                USB_DEVICE_CDC_Write(COM1,
-                        &appData.appCOMPortObjects[COM1].writeTransferHandle,
-                        com1ReadBuffer,
-                        appData.appCOMPortObjects[COM1].readDataLength,
-                        USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE);
+                uint16_t rx1Len =
+                        appData.appCOMPortObjects[COM1].readDataLength;
+
+                /* Process incoming bytes only when:
+                   – we are collecting write data (bytes are data, not commands), OR
+                   – the previous USB write has completed (prevents queueing two
+                     writes at once and overwriting com2WriteBuffer mid-flight). */
+                if (com1State == COM1_COLLECT_WRITE ||
+                    appData.appCOMPortObjects[COM1].isWriteComplete || 1)
+                {
+                    for (uint16_t i = 0U; i < rx1Len; i++)
+                        COM1_ProcessByte(com1ReadBuffer[i]);
+                }
+
+                /* Re-arm the COM2 receive */
+                USB_DEVICE_CDC_Read(COM1,
+                        &appData.appCOMPortObjects[COM1].readTransferHandle,
+                        com1ReadBuffer, APP_READ_BUFFER_SIZE);
             }
 
             /* COM2 – NAND command interpreter */
@@ -904,11 +1028,35 @@ void APP_Tasks(void)
             if (appData.appCOMPortObjects[COM1].isWriteComplete)
             {
                 appData.appCOMPortObjects[COM1].isWriteComplete = false;
-                appData.appCOMPortObjects[COM1].isReadComplete  = false;
 
-                USB_DEVICE_CDC_Read(COM1,
-                        &appData.appCOMPortObjects[COM1].readTransferHandle,
-                        com1ReadBuffer, APP_READ_BUFFER_SIZE);
+                if (com1State == COM1_SEND_READ)
+                {
+                    if (com1SendOffset < (uint16_t)NAND_PAGE_TOTAL)
+                    {
+                        uint16_t remaining =
+                                (uint16_t)NAND_PAGE_TOTAL - com1SendOffset;
+                        uint16_t chunk =
+                                (remaining < (uint16_t)APP_READ_BUFFER_SIZE)
+                                ? remaining
+                                : (uint16_t)APP_READ_BUFFER_SIZE;
+
+                        memcpy(com1WriteBuffer,
+                               nandPageBuf + com1SendOffset, chunk);
+                        com1SendOffset += chunk;
+
+                        appData.appCOMPortObjects[COM1].isWriteComplete = false;
+                        USB_DEVICE_CDC_Write(COM1,
+                                &appData.appCOMPortObjects[COM1].writeTransferHandle,
+                                com1WriteBuffer, chunk,
+                                USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE);
+                    }
+                    else
+                    {
+                        /* Entire page has been streamed */
+                        com1State = COM1_IDLE;
+                    }
+                }
+                /* For status strings (IDLE state), write is simply done. */
             }
 
             /* COM2: handle ongoing page-read streaming */
