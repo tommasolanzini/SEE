@@ -105,6 +105,9 @@
 
 #define CPU_FREQ_HZ     300000000UL   /* adjust if your clock differs     */
 
+#define TC_TICK_NS_NUM      160UL            /* tick period = 160/3 ns      */
+#define TC_TICK_NS_DEN      3UL
+
 // *****************************************************************************
 // Global application data
 // *****************************************************************************
@@ -118,6 +121,8 @@ uint8_t com2WriteBuffer[APP_READ_BUFFER_SIZE] USB_ALIGN;
 
 /* Full page buffer for NAND read result */
 static uint8_t nandPageBuf[NAND_PAGE_TOTAL];
+
+bool timer_period_written;
 
 /* COM2 protocol state machine */
 typedef enum {
@@ -140,51 +145,39 @@ static uint16_t   com1WriteOffset = 0;
 static uint16_t   com1SendOffset  = 0;
 static uint8_t    nandWriteBuf[COM2_WRITE_LEN];
 
-static inline void DELAY_NS(uint32_t ns)
+/* Read the current counter value */
+static inline uint16_t TC_GetTicks(void)
 {
-    /* Convert requested nanoseconds to ticks, rounding up */
-    uint32_t ticks = (uint32_t)(((uint64_t)ns * CPU_FREQ_HZ + 999999999ULL)
-                                / 1000000000ULL);
-
-    /* Cap to 24-bit counter range (one wrap = ~14.3 s at 300 MHz) */
-    if (ticks > SysTick->LOAD)
-        ticks = SysTick->LOAD;
-
-    uint32_t tStart = SysTick->VAL;
-
-    /* SysTick counts DOWN, so elapsed = tStart - VAL (with wrap handling) */
-    while (true)
-    {
-        uint32_t tNow = SysTick->VAL;
-        uint32_t elapsed = (tStart >= tNow)
-                           ? (tStart - tNow)
-                           : (SysTick->LOAD + 1U - tNow + tStart);
-        if (elapsed >= ticks)
-            break;
-    }
+    return (uint16_t)TC1_REGS->TC_CHANNEL[0].TC_CV;
 }
 
-static inline uint32_t TIMER_GetTicks(void)
+static inline uint16_t TC_ElapsedTicks(uint16_t tStart, uint16_t tEnd)
 {
-    /* SysTick->VAL is the current DOWN-counter value (24-bit)            */
-    return SysTick->VAL;
+    return (tEnd >= tStart) ? (tEnd - tStart)
+                            : (TC1_CH0_TimerPeriodGet() - tStart + tEnd + 1UL);
 }
 
-/* Returns elapsed nanoseconds between a start and end tick capture.
-   Handles the single wrap (end > start because counter counts down).     */
-static inline uint32_t TIMER_ElapsedNs(uint32_t startTicks, uint32_t endTicks)
-{
-    uint32_t elapsed;
-    if (startTicks >= endTicks)
-        elapsed = startTicks - endTicks;          /* normal: no wrap      */
-    else
-        elapsed = (SysTick->LOAD + 1U) - endTicks + startTicks; /* wrapped */
 
-    /* ticks × (1 000 000 000 / CPU_FREQ_HZ)
-       Multiply first to keep precision; safe because elapsed fits 24 bits */
-    return (uint32_t)(((uint64_t)elapsed * 1000000000ULL) / CPU_FREQ_HZ);
+static inline void DELAY_NS(uint32_t ns) //max 3000000
+{
+    //Convert ns to ticks, rounding up
+    uint16_t ticks = (uint16_t)(((uint64_t)ns * TC_TICK_NS_DEN
+                                 + (TC_TICK_NS_NUM - 1UL))
+                                / TC_TICK_NS_NUM);
+
+    uint16_t tStart = TC_GetTicks();
+    while (TC_ElapsedTicks(tStart, TC_GetTicks()) < ticks) {}
 }
 
+uint16_t AFEC0_Sample(void)
+{
+    AFEC0_ConversionStart();
+
+    // Wait for end of conversion on channel 9
+    while (!AFEC0_ChannelResultIsReady(AFEC_CH9)){}
+
+    return (uint16_t)((uint32_t)AFEC0_ChannelResultGet(AFEC_CH9) * 3300U / 4095U);
+}
 
 // *****************************************************************************
 // ── Low-level NAND bit-bang driver ──────────────────────────────────────────
@@ -402,14 +395,6 @@ static inline uint8_t NAND_ReadDataByte(void)
     DELAY_NS(tREH_NS);
     return data;
 }
-
-/* ---- Ready/Busy polling -------------------------------------------------- */
-
-/*
- * Wait for R/B# (F3_RB, PC1) to go HIGH.
- * Returns true on ready, false on timeout.
- */
-
 
 static uint8_t NAND_ReadStatus(void)
 {
@@ -835,6 +820,13 @@ static void COM1_ProcessByte(uint8_t byte)
     {
         /* ── IDLE: decode command character ── */
         case COM1_IDLE:
+            if(!timer_period_written)
+            {
+                char msg[32];
+                sprintf(msg, "Timer period: %05d             ", TC1_CH0_TimerPeriodGet());
+                COM1_SendString(msg);
+                timer_period_written = true;
+            }
             if (byte == (uint8_t)'1')
             {
                 LE_F3_OutputEnable();
@@ -857,7 +849,8 @@ static void COM1_ProcessByte(uint8_t byte)
             else if (byte >= (uint8_t)'1' && byte <= (uint8_t)'9')
             {
                 uint8_t n = byte - 0x30;
-                uint32_t times[9];
+                uint16_t times[9];
+                uint16_t ampout[36];
                 LE_F3_OutputEnable();
                 SEL_F3_OutputEnable();
                 AMP_OUT3_InputEnable();
@@ -867,10 +860,12 @@ static void COM1_ProcessByte(uint8_t byte)
                     LE_F3_Set();
                     DELAY_NS(20000);
                     
-                    uint32_t tStart = SysTick->VAL;
                     SEL_F3_Set();
-                    uint32_t tEnd = SysTick->VAL;
-                    times[i] = TIMER_ElapsedNs(tStart, tEnd);
+                    uint16_t tStart = TC_GetTicks();                
+                    while(AFEC0_Sample() < 350U){}
+                    while(AFEC0_Sample() > 350U){}
+                    uint16_t tEnd = TC_GetTicks();
+                    times[i] = (uint16_t)((uint32_t)TC_ElapsedTicks(tStart, tEnd)*160U/3U);
                     //while (!AMP_OUT3_Get());
                     //while (AMP_OUT3_Get());
 
@@ -883,12 +878,15 @@ static void COM1_ProcessByte(uint8_t byte)
                     DELAY_NS(5000);
                 }
                 char msg[32];
-                sprintf(msg, "%01d SEL events triggered", n);
+                sprintf(msg, "%01d SEL events triggered          ", n);
                 COM1_SendString(msg);
                 for (volatile uint8_t i = 0; i < n; i++)
                 {
-                    sprintf(msg, "Time %01d: %06d ns", i, times[i]);
+                    sprintf(msg, "Time %01d: %05d ns                ", i, times[i]);
+                    DELAY_NS(2500000);
                     COM1_SendString(msg);
+                    DELAY_NS(2500000);
+                    //while(appData.appCOMPortObjects[COM1].isWriteComplete == false){}
                 }
             }
             else if (byte == (uint8_t)'e' || byte == (uint8_t)'E')
@@ -940,6 +938,13 @@ static void COM1_ProcessByte(uint8_t byte)
 
 void APP_Initialize(void)
 {
+    TC1_CH0_TimerInitialize();
+    TC1_CH0_TimerStart();
+    timer_period_written = false;
+    
+    AFEC0_Initialize();
+    AFEC0_ChannelsEnable(AFEC_CH9_MASK);
+    
     appData.deviceHandle  = USB_DEVICE_HANDLE_INVALID;
     appData.isConfigured  = false;
     appData.state         = APP_STATE_INIT;

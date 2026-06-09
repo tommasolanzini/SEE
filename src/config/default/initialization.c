@@ -179,9 +179,17 @@ void SYS_Initialize ( void* data )
   
 
  
+    TC1_CH0_TimerInitialize(); 
+     
+    
+  
+
+ 
     TC0_CH0_TimerInitialize(); 
      
     
+    AFEC0_Initialize();
+
 
     /* MISRAC 2023 deviation block start */
     /* Following MISRA-C rules deviated in this block  */
@@ -196,13 +204,13 @@ void SYS_Initialize ( void* data )
 
     /* MISRAC 2012 deviation block end */
 
-    /* Initialize USB Driver */ 
-    sysObj.drvUSBHSV1Object = DRV_USBHSV1_Initialize(DRV_USBHSV1_INDEX_0, (SYS_MODULE_INIT *) &drvUSBInit);    
-
 
     /* Initialize the USB device layer */
     sysObj.usbDevObject0 = USB_DEVICE_Initialize (USB_DEVICE_INDEX_0 , ( SYS_MODULE_INIT* ) & usbDevInitData);
 
+
+    /* Initialize USB Driver */ 
+    sysObj.drvUSBHSV1Object = DRV_USBHSV1_Initialize(DRV_USBHSV1_INDEX_0, (SYS_MODULE_INIT *) &drvUSBInit);    
 
 
     /* MISRAC 2023 deviation block end */
