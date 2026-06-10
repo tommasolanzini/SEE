@@ -10,11 +10,25 @@
 extern APP_DATA appData;
 
 // --- Dimensioni Payload e Parità ---
-#define PAYLOAD_SIZE_BYTES 512 
+#define PAYLOAD_SIZE_BYTES 512
 #define PARITY_SIZE_BYTES 8      // BCH + CRC
 #define CODEWORD_SIZE_BYTES (PAYLOAD_SIZE_BYTES + PARITY_SIZE_BYTES) // 520 byte total
 
-volatile uint8_t TARGET_BIT_FLIPS = 0; 
+/* Protocollo host->MCU: 1 byte di controllo (numero di flip da iniettare)
+   seguito da PAYLOAD_SIZE_BYTES byte di payload. */
+#define CONTROL_SIZE_BYTES 1
+#define RX_SIZE_BYTES      (CONTROL_SIZE_BYTES + PAYLOAD_SIZE_BYTES) // 513 byte effettivi
+
+/* Storage del buffer di lettura arrotondato al multiplo di 32 (linea di cache
+   del Cortex-M7). La USB_DEVICE_CDC_Read fa una INVALIDATE della cache sul
+   buffer: con 513 byte l'ultima linea parziale verrebbe invalidata insieme a
+   cio' che la segue in RAM. Allineando la DIMENSIONE a 544 la invalidate tocca
+   solo storage di rx_buffer. La lettura usa comunque RX_SIZE_BYTES (513). */
+#define RX_BUF_BYTES       544
+
+/* Limite di sicurezza per inject_errors (deve combaciare con la dimensione
+   di flipped_positions[]). Un byte di controllo arriva al massimo a 255. */
+#define MAX_BIT_FLIPS 256
 
 // --- Prototipi delle funzioni per evitare dichiarazioni implicite ---
 void NAND_WriteByte(uint8_t data);
@@ -225,8 +239,8 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
 // 4. MAIN ENTRY POINT & CUSTOM STATE MACHINE
 // =============================================================================
 
-uint8_t CACHE_ALIGN rx_buffer[PAYLOAD_SIZE_BYTES];
-uint8_t CACHE_ALIGN tx_buffer[CODEWORD_SIZE_BYTES + 2]; 
+uint8_t CACHE_ALIGN rx_buffer[RX_BUF_BYTES];    // 513 byte usati (1 controllo + 512 payload), storage 544 per cache
+uint8_t CACHE_ALIGN tx_buffer[CODEWORD_SIZE_BYTES + 2];
 uint8_t codeword_buffer[CODEWORD_SIZE_BYTES];
 uint8_t flash_read_buffer[CODEWORD_SIZE_BYTES];
 uint32_t current_nand_page = 0x00000000;
@@ -236,13 +250,16 @@ bool block_erased = false;
 void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips) {
     if (num_flips == 0) return;
     uint32_t total_bits = byte_length * 8;
-    uint32_t flipped_positions[4] = {0}; 
-    uint8_t flips_applied = 0;
+    /* Dimensionato per coprire l'intero range del byte di controllo (0..255),
+       altrimenti un conteggio alto scriverebbe oltre l'array (era [4]). */
+    uint32_t flipped_positions[MAX_BIT_FLIPS] = {0};
+    if (num_flips > total_bits) num_flips = (uint8_t)total_bits; /* niente loop infinito */
+    uint16_t flips_applied = 0;
 
     while (flips_applied < num_flips) {
         uint32_t bit_idx = rand() % total_bits;
         bool already_flipped = false;
-        for (uint8_t i = 0; i < flips_applied; i++) {
+        for (uint16_t i = 0; i < flips_applied; i++) {
             if (flipped_positions[i] == bit_idx) { already_flipped = true; break; }
         }
         if (!already_flipped) {
@@ -294,7 +311,8 @@ int main ( void )
             switch(customState) {
                 case WAIT_FOR_READ_TRIGGER:
                     appData.appCOMPortObjects[0].isReadComplete = false;
-                    if (USB_DEVICE_CDC_Read(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].readTransferHandle, rx_buffer, PAYLOAD_SIZE_BYTES) == USB_DEVICE_CDC_RESULT_OK) {
+                    /* Legge 513 byte: rx_buffer[0] = numero di flip, rx_buffer[1..512] = payload */
+                    if (USB_DEVICE_CDC_Read(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].readTransferHandle, rx_buffer, RX_SIZE_BYTES) == USB_DEVICE_CDC_RESULT_OK) {
                         customState = WAIT_FOR_READ_COMPLETE;
                     }
                     break;
@@ -317,8 +335,11 @@ int main ( void )
                         block_erased  = true;
                     }
 
-                    gf2_encode_data(rx_buffer, PAYLOAD_SIZE_BYTES, codeword_buffer);
-                    inject_errors(codeword_buffer, CODEWORD_SIZE_BYTES, TARGET_BIT_FLIPS);
+                    /* rx_buffer[0] = numero di flip richiesto dall'host;
+                       il payload vero comincia da rx_buffer[1]. */
+                    uint8_t num_flips = rx_buffer[0];
+                    gf2_encode_data(&rx_buffer[CONTROL_SIZE_BYTES], PAYLOAD_SIZE_BYTES, codeword_buffer);
+                    inject_errors(codeword_buffer, CODEWORD_SIZE_BYTES, num_flips);
 
                     HW_NAND_Write_Codeword(current_nand_page, codeword_buffer, &codeword_buffer[PAYLOAD_SIZE_BYTES]);
                     HW_NAND_Read_Codeword(current_nand_page, flash_read_buffer, &flash_read_buffer[PAYLOAD_SIZE_BYTES]);
