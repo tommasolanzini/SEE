@@ -39,8 +39,13 @@ def main():
                 ok += 1
 
                 # ── Decoding ────────────────────────────────────────────────
-                # gf2 uses a SYSTEMATIC code: payload occupies the first 512
-                # bytes of the codeword; parity occupies the last 8 bytes.
+                # The firmware does NOT ship the raw codeword: it runs the BCH/CRC
+                # decode on-chip and returns the already-decoded, byte-aligned
+                # payload in the first 512 bytes, then 8 parity bytes, then the
+                # BCH status byte and the CRC status byte.
+                # (The codeword itself is bit-systematic, not byte-systematic:
+                #  the payload is shifted up by 58 bits, so resp[:512] of the raw
+                #  codeword would NOT be the payload — see gf2_extract_payload.)
                 received_payload = bytes(resp[:512])
                 received_parity  = bytes(resp[512:520])
                 bch_raw          = resp[520]
@@ -56,14 +61,17 @@ def main():
                     crc_errors += 1
 
                 match = (bytes(payload) == received_payload)
+                diff  = 0
                 if not match:
                     payload_mismatches += 1
                     diff = sum(a != b for a, b in zip(payload, received_payload))
 
                 status_str = (f"BCH={bch_status:+d}  CRC={'OK' if crc_ok else 'FAIL'}"
                               f"  payload={'OK' if match else f'MISMATCH({diff}B)'}")
-                print("sent word:", payload.hex()[:32] + "..." if SEND_SIZE > 16 else payload.hex())
-                print("received word:", received_payload.hex()[:32] + "..." if SEND_SIZE > 16 else received_payload.hex())
+                sent_hex = payload.hex()[:32] + "..." if SEND_SIZE > 16 else payload.hex()
+                recv_hex = received_payload.hex()[:32] + "..." if SEND_SIZE > 16 else received_payload.hex()
+                print(f"[{i+1:2}] sent: {sent_hex}")
+                print(f"     recv: {recv_hex}   {status_str}")
 
             elapsed = time.time() - start
             tp = (NUM_WORDS * SEND_SIZE) / elapsed / 1024

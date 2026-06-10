@@ -20,6 +20,14 @@ int gf2_correct_errors(uint8_t* data, int length, uint8_t* crc_valid);
 
 void gf2_encode_data(uint8_t* input_data, int input_length, uint8_t* output_codeword);
 
+/*
+ * Estrae il payload (allineato al byte) da un codeword sistematico.
+ * Il payload NON occupa i primi byte del codeword: e' spostato in alto di
+ * (32 + grado(g)) bit. Questa funzione annulla lo shift.
+ */
+void gf2_extract_payload(uint8_t* codeword, int codeword_length,
+                         uint8_t* payload_out, int payload_length);
+
 #ifdef __cplusplus
 }
 #endif

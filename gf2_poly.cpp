@@ -376,8 +376,17 @@ void gf2_encode_data(uint8_t* input_data, int input_length, uint8_t* output_code
     BigPoly word_crc = CRC_encoding(input_poly);
     BigPoly codeword = encoding(word_crc, g);
 
-    // Spacchetta il codeword nel byte array di uscita
-    int total_bytes = (codeword.bit_length() + 7) / 8;
+    // Spacchetta il codeword nel byte array di uscita.
+    //
+    // La lunghezza del codeword e' DETERMINISTICA:
+    //   total_bits = payload(input_length*8) + CRC(32) + BCH(grado di g)
+    // NON usare codeword.bit_length(): se i bit piu' alti del payload sono 0,
+    // bit_length() restituisce un valore minore e il ciclo scrive meno byte,
+    // lasciando i byte alti di output_codeword con valori "stantii" della
+    // chiamata precedente (bug latente: corrompe gli ultimi byte del payload).
+    int bch_parity  = 64 - __builtin_clzll(g) - 1;          // grado di g
+    int total_bits  = input_length * 8 + 32 + bch_parity;   // payload + CRC + BCH
+    int total_bytes = (total_bits + 7) / 8;
     for (int i = 0; i < total_bytes; ++i) {
         int word_idx = i / 8;
         int byte_idx = i % 8;
@@ -437,4 +446,49 @@ int gf2_correct_errors(uint8_t* data, int length, uint8_t* crc_valid) {
     }
 
     return error_pos.len;
+}
+
+/*
+ * gf2_extract_payload
+ *   codeword        : codeword sistematico (uscita di gf2_encode_data, o lo
+ *                     stesso buffer dopo gf2_correct_errors)
+ *   codeword_length : lunghezza in byte del codeword (es. 520)
+ *   payload_out     : buffer di uscita per il solo payload
+ *   payload_length  : numero di byte di payload da estrarre (es. 512)
+ *
+ * NB sul layout: il codice e' sistematico nello spazio dei BIT, non dei byte.
+ * In gf2_encode_data il payload viene spostato in alto di (32 + grado(g)) bit
+ * per fare spazio a CRC (32 bit, in basso) e parita' BCH (grado di g, ancora
+ * piu' in basso). Di conseguenza il payload NON occupa i primi byte del
+ * codeword: parte dal bit (32 + grado(g)) e non e' allineato al byte.
+ * Questa funzione annulla quello shift e riconsegna il payload pulito,
+ * allineato al byte, cosi' che l'host possa confrontarlo direttamente con
+ * cio' che ha inviato.
+ */
+void gf2_extract_payload(uint8_t* codeword, int codeword_length,
+                         uint8_t* payload_out, int payload_length) {
+    // Impacchetta il codeword (little-endian) in un BigPoly.
+    BigPoly cw;
+    int num_words = (codeword_length + 7) / 8;
+    for (int i = 0; i < codeword_length; ++i) {
+        cw.w[i / 8] |= (static_cast<uint64_t>(codeword[i]) << ((i % 8) * 8));
+    }
+    cw.n = num_words;
+    cw.trim();
+
+    // Rimuove i bit di parita': grado(g) bit BCH + 32 bit CRC, tutti in basso.
+    uint64_t g           = get_g_polynomial(GF_M);
+    int      bch_parity  = 64 - __builtin_clzll(g) - 1;   // grado di g
+    int      parity_bits = bch_parity + 32;               // BCH + CRC
+
+    BigPoly payload = cw >> parity_bits;
+
+    // Spacchetta il payload allineato al byte.
+    for (int i = 0; i < payload_length; ++i) {
+        int wi = i / 8;
+        int bi = (i % 8) * 8;
+        payload_out[i] = (wi < payload.n)
+                       ? static_cast<uint8_t>((payload.w[wi] >> bi) & 0xFFU)
+                       : 0U;
+    }
 }

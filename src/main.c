@@ -26,6 +26,7 @@ void HW_NAND_Erase_Block(uint32_t block_address);
 void HW_NAND_Write_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
 void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
 void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips);
+/* gf2_extract_payload è dichiarata in gf2_poly.h (linkage C). */
 
 // =============================================================================
 // 1. BIT-BANGING ENGINES (OPTIMIZED DIRECT REGISTER ACCESS)
@@ -228,8 +229,9 @@ uint8_t CACHE_ALIGN rx_buffer[PAYLOAD_SIZE_BYTES];
 uint8_t CACHE_ALIGN tx_buffer[CODEWORD_SIZE_BYTES + 2]; 
 uint8_t codeword_buffer[CODEWORD_SIZE_BYTES];
 uint8_t flash_read_buffer[CODEWORD_SIZE_BYTES];
-uint32_t current_nand_page = 0x00000000; 
-bool block_erased = false; 
+uint32_t current_nand_page = 0x00000000;
+uint32_t current_block     = 0x00000000;
+bool block_erased = false;
 
 void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips) {
     if (num_flips == 0) return;
@@ -304,10 +306,15 @@ int main ( void )
                     break;
 
                 case PROCESS_DATA:
-                    /* Formatta il blocco prima di effettuare la prima scrittura */
-                    if (!block_erased) {
-                        HW_NAND_Erase_Block(0); 
-                        block_erased = true;
+                    /* La NAND va cancellata prima di (ri)programmare. current_nand_page
+                       e' un row address completo -> block = page >> 8 (256 pagine per
+                       blocco). Cancella il blocco la prima volta che lo si tocca, anche
+                       dopo il wrap a pagina 256 (altrimenti uno stress test lungo ricomincia
+                       a corrompere appena entra in un blocco non cancellato). */
+                    if (!block_erased || (current_nand_page >> 8) != current_block) {
+                        current_block = current_nand_page >> 8;
+                        HW_NAND_Erase_Block(current_block);
+                        block_erased  = true;
                     }
 
                     gf2_encode_data(rx_buffer, PAYLOAD_SIZE_BYTES, codeword_buffer);
@@ -322,10 +329,19 @@ int main ( void )
                     uint8_t crc_status = 0;
                     int bch_status = gf2_correct_errors(flash_read_buffer, CODEWORD_SIZE_BYTES, &crc_status);
 
-                    for(int i = 0; i < CODEWORD_SIZE_BYTES; i++) {
-                        tx_buffer[i] = flash_read_buffer[i];
+                    /* Estrae il payload corretto nei primi 512 byte della risposta.
+                       ATTENZIONE: il payload NON sono i primi 512 byte del codeword
+                       (e' spostato in alto di 58 bit = 26 BCH + 32 CRC); senza questo
+                       passaggio l'host vedeva "corruzione" totale anche con 0 errori. */
+                    gf2_extract_payload(flash_read_buffer, CODEWORD_SIZE_BYTES,
+                                        tx_buffer, PAYLOAD_SIZE_BYTES);
+
+                    /* Gli 8 byte di parita' = i byte bassi del codeword (regione BCH+CRC). */
+                    for(int i = 0; i < PARITY_SIZE_BYTES; i++) {
+                        tx_buffer[PAYLOAD_SIZE_BYTES + i] = flash_read_buffer[i];
                     }
-                    tx_buffer[CODEWORD_SIZE_BYTES]     = (uint8_t)bch_status; 
+
+                    tx_buffer[CODEWORD_SIZE_BYTES]     = (uint8_t)bch_status;
                     tx_buffer[CODEWORD_SIZE_BYTES + 1] = crc_status;
                     
                     customState = SEND_MESSAGE;
