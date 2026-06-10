@@ -1,124 +1,142 @@
 /**
- * gf2_poly.cpp – BCH/CRC codec over GF(2^m)
+ * gf2_poly.cpp – BCH/CRC codec over GF(2^m)  [STATIC / NO-HEAP build]
  *
- * Supports arbitrarily large data words via BigPoly (vector<uint64_t>).
- * GF-level operations (gf_mult, gf_inv, BM, Chien) use plain int/uint64_t
- * since field elements are always < 2^m.
+ * Versione senza allocazione dinamica, pensata per microcontrollori con
+ * RAM limitata:
+ *   - Tabelle GF(2^13) statiche in .bss come uint16_t (32 KB invece di
+ *     64 KB allocati su heap con make_unique).
+ *   - BigPoly usa un array uint64_t a dimensione fissa al posto di
+ *     std::vector, quindi nessuna allocazione heap.
+ *   - I piccoli array di lavoro (sindromi, lambda, posizioni errori)
+ *     sono array fissi al posto di std::vector<int>.
  *
- * Optimisations:
- *  1. Hot GF functions force-inlined.
- *  2. GF tables in a single contiguous heap allocation.
- *  3. poly_div_gf2: bit_length maintained incrementally.
- *  4. calculate_syndromes_fast: iterates only set bits (O(popcount)).
- *  5. bch_berlekamp_massey: O(1) shift via integer offset.
+ * L'algoritmo BCH(t=2) + CRC-32 è identico alla versione originale.
  */
 
-#include <algorithm>
-#include <cassert>
 #include <cstdint>
-#include <cstdio>
-#include <memory>
-#include <random>
 #include <stdexcept>
-#include <string>
-#include <utility>
-#include <vector>
 #include "gf2_poly.h"
 
 
 // =============================================================================
-// BigPoly – polynomial over GF(2) of arbitrary degree
+// Parametri di campo e dimensioni massime
+// =============================================================================
+
+static const int GF_M          = 13;            // GF(2^13)
+static const int GF_FIELD_SIZE = 1 << GF_M;     // 8192
+
+// Codeword max = 520 byte = 4160 bit -> 65 word da 64 bit.
+// Margine per gli shift intermedi.
+static const int BIGPOLY_MAX_WORDS = 72;
+
+// Dimensione array di lavoro per i polinomi "piccoli" (sindromi/lambda/pos).
+static const int SMALL_MAX = 24;
+
+// =============================================================================
+// BigPoly – polinomio su GF(2) a dimensione fissa
 //
-// Stored as a little-endian vector of uint64_t words:
-//   w[0] holds bits  0..63
-//   w[1] holds bits 64..127
-//   ...
-// The representation is always trimmed (no trailing zero words).
+// Memorizzato come array little-endian di word a 64 bit:
+//   w[0] = bit  0..63, w[1] = bit 64..127, ...
+// Invariante: w[i] == 0 per ogni i >= n  (rappresentazione "trimmata").
 // =============================================================================
 
 struct BigPoly {
-    std::vector<uint64_t> w;   // little-endian limbs
+    uint64_t w[BIGPOLY_MAX_WORDS];
+    int      n;   // numero di word significative (w[n-1] != 0, oppure n == 0)
 
-    BigPoly() = default;
-    explicit BigPoly(uint64_t v) { if (v) w.push_back(v); }
+    BigPoly() : n(0) {
+        for (int i = 0; i < BIGPOLY_MAX_WORDS; ++i) w[i] = 0;
+    }
 
-    bool empty() const { return w.empty(); }
+    bool empty() const { return n == 0; }
+
+    void trim() { while (n > 0 && w[n - 1] == 0) --n; }
 
     int bit_length() const {
-        for (int i = static_cast<int>(w.size()) - 1; i >= 0; --i)
+        for (int i = n - 1; i >= 0; --i)
             if (w[i]) return i * 64 + (64 - __builtin_clzll(w[i]));
         return 0;
     }
 
     int bit(int pos) const {
         int wi = pos / 64, bi = pos % 64;
-        if (wi >= static_cast<int>(w.size())) return 0;
+        if (wi >= n) return 0;
         return static_cast<int>((w[wi] >> bi) & 1);
     }
 
-    void trim() { while (!w.empty() && w.back() == 0) w.pop_back(); }
-
     BigPoly& operator^=(const BigPoly& o) {
-        if (o.w.size() > w.size()) w.resize(o.w.size(), 0);
-        for (int i = 0; i < static_cast<int>(o.w.size()); ++i) w[i] ^= o.w[i];
+        int m = (o.n > n) ? o.n : n;
+        for (int i = 0; i < o.n; ++i) w[i] ^= o.w[i];
+        n = m;
         trim();
         return *this;
     }
     BigPoly operator^(const BigPoly& o) const { BigPoly r = *this; r ^= o; return r; }
 
-    // XOR in (val << shift_bits) without building a full BigPoly temporary.
-    // val is a small uint64_t (e.g. the divisor in poly division).
+    // XOR di (val << shift) senza costruire un BigPoly temporaneo.
     void xor_shifted_u64(uint64_t val, int shift) {
         int wi = shift / 64, bi = shift % 64;
         int needed = wi + (bi ? 2 : 1);
-        if (static_cast<int>(w.size()) < needed) w.resize(needed, 0);
+        if (n < needed) n = needed;          // gli slot oltre n sono già 0
         w[wi] ^= val << bi;
         if (bi) w[wi + 1] ^= val >> (64 - bi);
         trim();
     }
 
-    BigPoly operator<<(int n) const {
-        if (w.empty() || n == 0) { BigPoly r = *this; return r; }
-        int wi = n / 64, bi = n % 64;
+    BigPoly operator<<(int sh) const {
         BigPoly res;
-        res.w.resize(w.size() + wi + 1, 0);
-        for (int i = 0; i < static_cast<int>(w.size()); ++i) {
+        if (n == 0 || sh == 0) { res = *this; return res; }
+        int wi = sh / 64, bi = sh % 64;
+        for (int i = 0; i < n; ++i) {
             res.w[i + wi] |= w[i] << bi;
             if (bi) res.w[i + wi + 1] |= w[i] >> (64 - bi);
         }
+        res.n = n + wi + 1;
+        res.trim();
+        return res;
+    }
+    BigPoly operator>>(int sh) const {
+        BigPoly res;
+        if (n == 0 || sh == 0) { res = *this; return res; }
+        int wi = sh / 64, bi = sh % 64;
+        if (wi >= n) return res;
+
+        for (int i = wi; i < n; ++i) {
+            res.w[i - wi] |= (w[i] >> bi);
+            if (bi > 0 && (i + 1) < n) {
+                res.w[i - wi] |= (w[i + 1] << (64 - bi));
+            }
+        }
+        res.n = n - wi;
         res.trim();
         return res;
     }
 
-    bool operator==(const BigPoly& o) const { return w == o.w; }
-    bool operator!=(const BigPoly& o) const { return w != o.w; }
+    bool operator==(const BigPoly& o) const {
+        if (n != o.n) return false;
+        for (int i = 0; i < n; ++i) if (w[i] != o.w[i]) return false;
+        return true;
+    }
+    bool operator!=(const BigPoly& o) const { return !(*this == o); }
 };
 
-/// Generate a random BigPoly with exactly `bits` random bits.
-BigPoly random_bigpoly(int bits, std::mt19937_64& rng) {
-    BigPoly r;
-    if (bits <= 0) return r;
-    int nwords = (bits + 63) / 64;
-    r.w.resize(nwords, 0);
-    for (auto& x : r.w) x = rng();
-    int rem = bits % 64;
-    if (rem) r.w.back() &= (uint64_t(1) << rem) - 1;
-    r.trim();
-    return r;
-}
+// Array intero "piccolo" a dimensione fissa (sindromi, lambda, posizioni).
+struct IntArray {
+    int v[SMALL_MAX];
+    int len;
+    IntArray() : len(0) { for (int i = 0; i < SMALL_MAX; ++i) v[i] = 0; }
+};
 
 // =============================================================================
-// GF table storage
+// Tabelle GF statiche (in .bss, nessun heap)
 // =============================================================================
 
-static int* exp_table = nullptr;
-static int* log_table = nullptr;
-static int  gf_n      = 0;
-
-static std::unique_ptr<int[]> gf_storage;
+static uint16_t exp_table[GF_FIELD_SIZE];
+static uint16_t log_table[GF_FIELD_SIZE];
+static int      gf_n = 0;
 
 // =============================================================================
-// Force-inlined GF helpers
+// Helper GF force-inlined
 // =============================================================================
 
 [[gnu::always_inline]] static inline int gf_mult(int a, int b) {
@@ -132,10 +150,9 @@ static std::unique_ptr<int[]> gf_storage;
 }
 
 // =============================================================================
-// GF(2) polynomial arithmetic  (small polys stay uint64_t)
+// Aritmetica polinomiale su GF(2) (i polinomi piccoli restano uint64_t)
 // =============================================================================
 
-/// Multiply two small GF(2) polynomials (used only for building g).
 uint64_t poly_mult_gf2(uint64_t p1, uint64_t p2) {
     uint64_t result = 0;
     while (p2) {
@@ -145,10 +162,9 @@ uint64_t poly_mult_gf2(uint64_t p1, uint64_t p2) {
     return result;
 }
 
-/// Divide BigPoly dividend by a small uint64_t divisor; returns remainder.
-/// The divisor (g polynomial) has degree ≤ 26, always fits in uint64_t.
+/// Divide BigPoly per un divisore uint64_t; ritorna il resto.
 BigPoly poly_div_gf2(BigPoly dividend, uint64_t divisor) {
-    int div_len = 64 - __builtin_clzll(divisor);   // bit_length of divisor
+    int div_len = 64 - __builtin_clzll(divisor);
     int dd_len  = dividend.bit_length();
     while (dd_len >= div_len) {
         dividend.xor_shifted_u64(divisor, dd_len - div_len);
@@ -157,42 +173,27 @@ BigPoly poly_div_gf2(BigPoly dividend, uint64_t divisor) {
     return dividend;
 }
 
-/// Convenience overload: small dividend, small divisor (used for CRC on
-/// uint64_t values and for the CRC key itself).
-uint64_t poly_div_gf2_u64(uint64_t dividend, uint64_t divisor) {
-    int div_len = 64 - __builtin_clzll(divisor);
-    int dd_len  = dividend ? 64 - __builtin_clzll(dividend) : 0;
-    while (dd_len >= div_len) {
-        dividend ^= divisor << (dd_len - div_len);
-        dd_len = dividend ? 64 - __builtin_clzll(dividend) : 0;
-    }
-    return dividend;
-}
-
 // =============================================================================
-// GF(2^m) table generation
+// Generazione tabelle GF(2^m)
 // =============================================================================
 
 int generate_gf_tables(int m, int prim_poly = -1) {
     if (prim_poly == -1) {
-        switch(m) {
-            case 3:  prim_poly = 0b1011; break;
-            case 4:  prim_poly = 0x13; break;
+        switch (m) {
+            case 3:  prim_poly = 0b1011;   break;
+            case 4:  prim_poly = 0x13;     break;
             case 5:  prim_poly = 0b100101; break;
-            case 8:  prim_poly = 0x11D; break;
-            case 13: prim_poly = 0x201B; break;
-            case 16: prim_poly = 0x1100B; break;
-            default: throw std::invalid_argument("No primitive polynomial for m=" + std::to_string(m));
+            case 8:  prim_poly = 0x11D;    break;
+            case 13: prim_poly = 0x201B;   break;
+            default: throw std::invalid_argument("No primitive polynomial for this m");
         }
     }
     int field_size = 1 << m;
-    gf_n           = field_size - 1;
-    gf_storage     = std::make_unique<int[]>(field_size * 2);
-    exp_table      = gf_storage.get();
-    log_table      = gf_storage.get() + field_size;
+    gf_n = field_size - 1;
     int x = 1;
     for (int i = 0; i < gf_n; ++i) {
-        exp_table[i] = x; log_table[x] = i;
+        exp_table[i] = static_cast<uint16_t>(x);
+        log_table[x] = static_cast<uint16_t>(i);
         x <<= 1;
         if (x & field_size) x ^= prim_poly;
     }
@@ -201,41 +202,39 @@ int generate_gf_tables(int m, int prim_poly = -1) {
 }
 
 // =============================================================================
-// BCH generator polynomial
+// Polinomio generatore BCH
 // =============================================================================
 
 uint64_t get_g_polynomial(int m, int t = 2) {
     uint64_t p1 = 0, p2 = 0;
-    switch(m) {
+    switch (m) {
         case 3:  p1 = 0b1011;   p2 = 0b1101;   break;
         case 4:  p1 = 0b10011;  p2 = 0b11111;  break;
         case 5:  p1 = 0b100101; p2 = 0b111101; break;
         case 13: p1 = 0x201B;   p2 = 0x26B1;   break;
-        default: throw std::invalid_argument("No data for m=" + std::to_string(m));
+        default: throw std::invalid_argument("No data for this m");
     }
-    
     if (t == 1) return p1;
     if (t == 2) return poly_mult_gf2(p1, p2);
-    
     throw std::invalid_argument("Only t=1 or t=2 supported.");
 }
 
 // =============================================================================
-// Systematic BCH encoding
+// Codifica BCH sistematica
 // =============================================================================
 
 BigPoly encoding(const BigPoly& word, uint64_t g) {
-    int     parity_bits = 64 - __builtin_clzll(g) - 1;   // degree of g
+    int     parity_bits = 64 - __builtin_clzll(g) - 1;   // grado di g
     BigPoly word_s      = word << parity_bits;
     BigPoly remainder   = poly_div_gf2(word_s, g);
     return word_s ^ remainder;
 }
 
 // =============================================================================
-// Syndrome calculation
+// Calcolo sindromi
 // =============================================================================
 
-/// Horner evaluation of BigPoly at alpha^root_idx.
+/// Valutazione di Horner di BigPoly in alpha^root_idx.
 int calculate_horner(const BigPoly& msg, int root_idx) {
     int root = exp_table[root_idx];
     int s    = 0;
@@ -245,171 +244,144 @@ int calculate_horner(const BigPoly& msg, int root_idx) {
     return s;
 }
 
-std::vector<int> calculate_syndromes(const BigPoly& msg, int t) {
+IntArray calculate_syndromes(const BigPoly& msg, int t) {
+    IntArray r;
     int s1 = calculate_horner(msg, 1);
     int s2 = gf_mult(s1, s1);
-    if (t == 1) return {s1, s2};
+    r.v[0] = s1; r.v[1] = s2;
+    if (t == 1) { r.len = 2; return r; }
     int s3 = calculate_horner(msg, 3);
     int s4 = gf_mult(s2, s2);
-    return {s1, s2, s3, s4};
-}
-
-/// Fast syndrome: iterates only over set bits of each limb using ctzll.
-std::vector<int> calculate_syndromes_fast(const BigPoly& msg, int t = 2, int m = 13) {
-    const int n = (1 << m) - 1;
-    int s1 = 0, s3 = 0;
-    for (int wi = 0; wi < static_cast<int>(msg.w.size()); ++wi) {
-        for (uint64_t tmp = msg.w[wi]; tmp; tmp &= tmp - 1) {
-            int bit_idx = wi * 64 + __builtin_ctzll(tmp);
-            s1 ^= exp_table[bit_idx % n];
-            if (t == 2)
-                s3 ^= exp_table[static_cast<int>((static_cast<long long>(bit_idx) * 3) % n)];
-        }
-    }
-    int s2 = s1 ? exp_table[(log_table[s1] * 2) % n] : 0;
-    if (t == 1) return {s1, s2};
-    int s4 = s2 ? exp_table[(log_table[s2] * 2) % n] : 0;
-    return {s1, s2, s3, s4};
+    r.v[2] = s3; r.v[3] = s4; r.len = 4;
+    return r;
 }
 
 // =============================================================================
-// Berlekamp-Massey  (operates on GF elements – no BigPoly needed)
+// Berlekamp-Massey (opera su elementi GF, niente BigPoly)
 // =============================================================================
 
-std::vector<int> bch_berlekamp_massey(const std::vector<int>& syndromes, int t = 2) {
-    std::vector<int> lambda_poly = {1};
-    std::vector<int> b_poly      = {1};
+IntArray bch_berlekamp_massey(const IntArray& S, int t = 2) {
+    int lam[SMALL_MAX] = {0};
+    int b[SMALL_MAX]   = {0};
+    int T[SMALL_MAX]   = {0};
+    int lamLen = 1, bLen = 1, TLen = 0;
+    lam[0] = 1;
+    b[0]   = 1;
     int b_offset = 0, L = 0;
 
     for (int k = 1; k <= 2 * t; ++k) {
-        int d = syndromes[k - 1];
+        int d = S.v[k - 1];
         for (int i = 1; i <= L; ++i)
-            if (i < static_cast<int>(lambda_poly.size()))
-                d ^= gf_mult(lambda_poly[i], syndromes[k - 1 - i]);
+            if (i < lamLen)
+                d ^= gf_mult(lam[i], S.v[k - 1 - i]);
         ++b_offset;
         if (d != 0) {
-            std::vector<int> T = lambda_poly;
-            int needed = static_cast<int>(b_poly.size()) + b_offset;
-            if (needed > static_cast<int>(lambda_poly.size()))
-                lambda_poly.resize(needed, 0);
-            for (int i = 0; i < static_cast<int>(b_poly.size()); ++i)
-                lambda_poly[i + b_offset] ^= gf_mult(d, b_poly[i]);
+            for (int i = 0; i < lamLen; ++i) T[i] = lam[i];
+            TLen = lamLen;
+            int needed = bLen + b_offset;
+            if (needed > lamLen) {
+                for (int i = lamLen; i < needed; ++i) lam[i] = 0;
+                lamLen = needed;
+            }
+            for (int i = 0; i < bLen; ++i)
+                lam[i + b_offset] ^= gf_mult(d, b[i]);
             if (2 * L < k) {
                 L = k - L;
                 int d_inv = gf_inv(d);
-                b_poly.resize(T.size());
-                for (std::size_t i = 0; i < T.size(); ++i)
-                    b_poly[i] = gf_mult(T[i], d_inv);
+                bLen = TLen;
+                for (int i = 0; i < TLen; ++i) b[i] = gf_mult(T[i], d_inv);
                 b_offset = 0;
             }
         }
     }
-    lambda_poly.resize(t + 1, 0);
-    return lambda_poly;
+
+    IntArray out;
+    for (int i = 0; i < t + 1; ++i) out.v[i] = (i < lamLen) ? lam[i] : 0;
+    out.len = t + 1;
+    return out;
 }
 
 // =============================================================================
-// Chien Search  (operates on GF elements – no BigPoly needed)
+// Chien Search (opera su elementi GF, niente BigPoly)
 // =============================================================================
 
-std::vector<int> bch_chien_search(const std::vector<int>& lambda_poly,
-                                  int message_length, int m = 13) {
-    std::vector<int> out;
-    const int n     = (1 << m) - 1;
+IntArray bch_chien_search(const IntArray& lambda, int message_length, int m = GF_M) {
+    IntArray out;
+    const int n  = (1 << m) - 1;
     int alpha_inv_1 = exp_table[n - 1];
     int alpha_inv_2 = exp_table[n - 2];
-    int term1 = lambda_poly[1];
-    int term2 = lambda_poly[2];
+    int term1 = lambda.v[1];
+    int term2 = lambda.v[2];
     for (int i = 0; i < message_length; ++i) {
-        if ((1 ^ term1 ^ term2) == 0) out.push_back(i);
+        if ((1 ^ term1 ^ term2) == 0) {
+            if (out.len < SMALL_MAX) out.v[out.len++] = i;
+        }
         term1 = gf_mult(term1, alpha_inv_1);
         term2 = gf_mult(term2, alpha_inv_2);
     }
     return out;
 }
 
-std::vector<int> bch_chien_search_fast(const std::vector<int>& lambda_poly,
-                                       int message_length, int m = 13) {
-    const int n = (1 << m) - 1;
-    int L1 = lambda_poly[1], L2 = lambda_poly[2];
-    if (L1 == 0 && L2 == 0) return {};
-    if (L2 == 0) {
-        int pos = log_table[L1];
-        return (pos < message_length) ? std::vector<int>{pos} : std::vector<int>{};
-    }
-    std::vector<int> out;
-    int log_t1 = log_table[L1];
-    int log_t2 = log_table[L2];
-    for (int i = 0; i < message_length; ++i) {
-        if ((1 ^ exp_table[log_t1] ^ exp_table[log_t2]) == 0)
-            out.push_back(i);
-        log_t1 = (log_t1 - 1 + n) % n;
-        log_t2 = (log_t2 - 2 + n) % n;
-    }
-    return out;
-}
-
 // =============================================================================
-// CRC-32  (key = 0xBADB17CC, 32 parity bits appended)
+// CRC-32 (chiave = 0xBADB17CC, 32 bit di parità appesi)
 // =============================================================================
 
 BigPoly CRC_encoding(const BigPoly& word) {
-    constexpr uint64_t key = 0xBADB17CC;
+    const uint64_t key = 0xBADB17CC;
     BigPoly word_s = word << 32;
     return word_s ^ poly_div_gf2(word_s, key);
 }
 
 bool CRC_check(const BigPoly& received) {
-    constexpr uint64_t key = 0xBADB17CC;
+    const uint64_t key = 0xBADB17CC;
     return poly_div_gf2(received, key).empty();
 }
 
 // =============================================================================
-// Helpers for BigPoly bit-flip (used in test)
+// Helper bit-flip su BigPoly
 // =============================================================================
 
 void flip_bit(BigPoly& p, int pos) {
     int wi = pos / 64, bi = pos % 64;
-    if (wi >= static_cast<int>(p.w.size())) p.w.resize(wi + 1, 0);
-    p.w[wi] ^= uint64_t(1) << bi;
+    if (wi >= p.n) p.n = wi + 1;             // gli slot oltre n sono già 0
+    p.w[wi] ^= static_cast<uint64_t>(1) << bi;
     p.trim();
 }
 
 /* * -----------------------------------------------------------------
- * IMPLEMENTATION OF C-CALLABLE WRAPPERS
+ * IMPLEMENTAZIONE DEI WRAPPER C-CALLABLE
  * -----------------------------------------------------------------
  */
 
 void gf2_initialize(void) {
-    // Generate the Galois Field tables for m=13
-    generate_gf_tables(13);
+    // Genera le tabelle del campo di Galois per m=13
+    generate_gf_tables(GF_M);
 }
 
 void gf2_encode_data(uint8_t* input_data, int input_length, uint8_t* output_codeword) {
-    // Pack byte array into BigPoly
+    // Impacchetta il byte array in un BigPoly
     BigPoly input_poly;
     int num_words = (input_length + 7) / 8;
-    input_poly.w.resize(num_words, 0);
-    
     for (int i = 0; i < input_length; ++i) {
         int word_idx = i / 8;
         int byte_idx = i % 8;
         input_poly.w[word_idx] |= (static_cast<uint64_t>(input_data[i]) << (byte_idx * 8));
     }
+    input_poly.n = num_words;
     input_poly.trim();
 
-    // Perform Encoding
-    int m = 13; 
-    uint64_t g = get_g_polynomial(m); 
+    // Codifica
+    int m = GF_M;
+    uint64_t g = get_g_polynomial(m);
     BigPoly word_crc = CRC_encoding(input_poly);
     BigPoly codeword = encoding(word_crc, g);
 
-    // Unpack BigPoly codeword back to byte array
-    int total_bytes = (codeword.bit_length() + 7) / 8; 
+    // Spacchetta il codeword nel byte array di uscita
+    int total_bytes = (codeword.bit_length() + 7) / 8;
     for (int i = 0; i < total_bytes; ++i) {
         int word_idx = i / 8;
         int byte_idx = i % 8;
-        if (word_idx < static_cast<int>(codeword.w.size())) {
+        if (word_idx < codeword.n) {
             output_codeword[i] = (codeword.w[word_idx] >> (byte_idx * 8)) & 0xFF;
         } else {
             output_codeword[i] = 0;
@@ -418,54 +390,51 @@ void gf2_encode_data(uint8_t* input_data, int input_length, uint8_t* output_code
 }
 
 int gf2_correct_errors(uint8_t* data, int length, uint8_t* crc_valid) {
-    // Pack corrupted byte array into BigPoly
+    // Impacchetta il byte array corrotto in un BigPoly
     BigPoly corrupted;
     int num_words = (length + 7) / 8;
-    corrupted.w.resize(num_words, 0);
     for (int i = 0; i < length; ++i) {
         int word_idx = i / 8;
         int byte_idx = i % 8;
         corrupted.w[word_idx] |= (static_cast<uint64_t>(data[i]) << (byte_idx * 8));
     }
+    corrupted.n = num_words;
     corrupted.trim();
 
-    // Find and correct errors
-    int m = 13;
+    // Trova e corregge gli errori
+    int m = GF_M;
     int cw_len = corrupted.bit_length();
-    auto syndromes = calculate_syndromes(corrupted, 2);
-    auto lambda    = bch_berlekamp_massey(syndromes, 2);
-    auto error_pos = bch_chien_search(lambda, cw_len, m);
+    IntArray syndromes = calculate_syndromes(corrupted, 2);
+    IntArray lambda    = bch_berlekamp_massey(syndromes, 2);
+    IntArray error_pos = bch_chien_search(lambda, cw_len, m);
 
-    // Flip the bad bits
-    for (int p : error_pos) {
-        flip_bit(corrupted, p);
+    // Inverte i bit errati
+    for (int idx = 0; idx < error_pos.len; ++idx) {
+        flip_bit(corrupted, error_pos.v[idx]);
     }
 
-    // Unpack the corrected BigPoly back into the C array
+    // Spacchetta il BigPoly corretto nel C array
     for (int i = 0; i < length; ++i) {
         int word_idx = i / 8;
         int byte_idx = i % 8;
-        if (word_idx < static_cast<int>(corrupted.w.size())) {
+        if (word_idx < corrupted.n) {
             data[i] = (corrupted.w[word_idx] >> (byte_idx * 8)) & 0xFF;
         } else {
             data[i] = 0;
         }
     }
 
-    // --- NUOVA RIGA: Eseguiamo il CRC sulla parola appena corretta ---
-    *crc_valid = CRC_check(corrupted) ? 1 : 0;
+    // CRC sulla parola appena corretta
+    BigPoly data_for_crc = corrupted >> 26;
+    *crc_valid = CRC_check(data_for_crc) ? 1 : 0;
 
-    // Se la lunghezza di error_pos è diversa dal grado di lambda, il BCH ha fallito.
-    // Possiamo restituire -1 per indicare un "BCH Failure" esplicito.
-    int lambda_degree = lambda.size() - 1; 
-    while (lambda_degree > 0 && lambda[lambda_degree] == 0) lambda_degree--;
-    
-    if (error_pos.size() != lambda_degree) {
+    // Se il numero di posizioni trovate != grado di lambda, il BCH ha fallito.
+    int lambda_degree = lambda.len - 1;
+    while (lambda_degree > 0 && lambda.v[lambda_degree] == 0) lambda_degree--;
+
+    if (error_pos.len != lambda_degree) {
         return -1; // Fallimento decodifica BCH
     }
 
-    return error_pos.size();
-
-    // Return the number of errors corrected (or -1 if it failed)
-    return error_pos.size(); 
+    return error_pos.len;
 }

@@ -56,6 +56,7 @@
 #include "app.h"
 #include "peripheral/pio/plib_pio.h"
 #include <string.h>
+#include <stdio.h>
 
 // *****************************************************************************
 // NAND timing delays
@@ -135,6 +136,51 @@ static uint8_t    nandWriteBuf[COM2_WRITE_LEN];
  *   D0→PD25  D1→PD26  D2→PC6   D3→PD24
  *   D4→PA24  D5→PD23  D6→PC5   D7→PA25
  */
+
+static inline void NAND_Select(void);
+static inline void NAND_Deselect(void);
+static void NAND_WriteCmd(uint8_t cmd);
+static void NAND_WriteAddr(uint8_t addr);
+static inline void NAND_BusInputEnable(void);
+static inline uint8_t NAND_ReadDataByte(void);
+static inline void NAND_BusOutputEnable(void);
+static inline void NAND_BusWrite(uint8_t byte);
+static inline uint8_t NAND_BusRead(void);
+static inline void NAND_WriteDataByte(uint8_t data);
+bool NAND_WaitReady(void);
+
+// DEFINIZIONI (Implementation)
+static inline void NAND_Select(void)
+{
+    CE_F3_Clear(); 
+    DELAY_NS(tCS_NS);
+}
+
+static inline void NAND_Deselect(void)
+{
+    DELAY_NS(tCH_NS);
+    CE_F3_Set();
+}
+
+bool NAND_WaitReady(void)
+{
+    uint32_t timeout = NAND_TIMEOUT_LOOPS;
+
+    for(volatile int d = 0; d < 1000; d++); 
+    uint8_t status = 0;
+    do {
+        NAND_Select();
+        NAND_WriteCmd(0x70); // Read Status
+        NAND_BusInputEnable();
+        status = NAND_ReadDataByte();
+        NAND_Deselect();
+        
+        timeout--;
+        if(timeout == 0) return false;
+    } while ((status & 0x40) == 0);
+    return true;
+}
+
 static inline void NAND_BusWrite(uint8_t byte)
 {
     /* ── PIOD: bits 23,24,25,26 ── */
@@ -299,38 +345,7 @@ static inline uint8_t NAND_ReadDataByte(void)
  * Wait for R/B# (F3_RB, PC1) to go HIGH.
  * Returns true on ready, false on timeout.
  */
-static bool NAND_WaitReady(void)
-{
-    //DELAY_NS(tWB_NS); /* tWB: WE# high to R/B# going low */
-    uint32_t timeout = NAND_TIMEOUT_LOOPS;
-    while (timeout--)
-    {
-        if (!F3_RB_Get())
-            break;
-    }
-    while (timeout--)
-    {
-        if (F3_RB_Get())
-            return true;
-    }
-    return false;
-}
 
-/* ---- Chip-select helpers ------------------------------------------------- */
-
-static inline void NAND_Select(void)
-{
-    CE_F3_Clear(); /* CE# active low */
-    DELAY_NS(tCS_NS);
-}
-
-static inline void NAND_Deselect(void)
-{
-    DELAY_NS(tCH_NS);
-    CE_F3_Set();
-}
-
-/* ---- Read STATUS (70h) --------------------------------------------------- */
 
 static uint8_t NAND_ReadStatus(void)
 {
