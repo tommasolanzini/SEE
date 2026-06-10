@@ -3,30 +3,41 @@
 #include <stdlib.h>                     
 #include <stdint.h>
 #include "definitions.h" 
-#include "app.h"         // Allows us to read app.c's USB flags
+#include "app.h"         // Consente di leggere i flag USB di app.c
 #include "gf2_poly.h"
 
-// Bring in the appData structure from app.c so we can safely hijack it
+// Recupera la struttura appData definita in app.c per gestirne lo stato
 extern APP_DATA appData;
 
-// --- Payload and Parity Sizes ---
+// --- Dimensioni Payload e Parità ---
 #define PAYLOAD_SIZE_BYTES 512 
 #define PARITY_SIZE_BYTES 8      // BCH + CRC
-#define CODEWORD_SIZE_BYTES (PAYLOAD_SIZE_BYTES + PARITY_SIZE_BYTES) // 520 bytes total
+#define CODEWORD_SIZE_BYTES (PAYLOAD_SIZE_BYTES + PARITY_SIZE_BYTES) // 520 byte total
 
 volatile uint8_t TARGET_BIT_FLIPS = 0; 
+
+// --- Prototipi delle funzioni per evitare dichiarazioni implicite ---
+void NAND_WriteByte(uint8_t data);
+uint8_t NAND_ReadByte(void);
+void NAND_Command(uint8_t cmd);
+void NAND_Address(uint8_t addr);
+void HW_NAND_Wait_Ready(bool restore_read_mode);
+void HW_NAND_Erase_Block(uint32_t block_address);
+void HW_NAND_Write_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
+void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
+void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips);
 
 // =============================================================================
 // 1. BIT-BANGING ENGINES (OPTIMIZED DIRECT REGISTER ACCESS)
 // =============================================================================
 
 void NAND_WriteByte(uint8_t data) {
-    /* 1. Force pins to OUTPUT mode bypassing Harmony abstractions */
+    /* 1. Forza i pin in modalità OUTPUT scavalcando le astrazioni di Harmony */
     PIOD_REGS->PIO_OER = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
     PIOC_REGS->PIO_OER = (1UL << 6) | (1UL << 5);
     PIOA_REGS->PIO_OER = (1UL << 24) | (1UL << 25);
 
-    /* 2. Fast, atomic register write */
+    /* 2. Scrittura atomica e veloce sui registri per impostare il bus dati */
     uint32_t pd_set = 0U, pd_clr = 0U;
     if (data & 0x01U) pd_set |= (1UL << 25); else pd_clr |= (1UL << 25); 
     if (data & 0x02U) pd_set |= (1UL << 26); else pd_clr |= (1UL << 26); 
@@ -47,7 +58,7 @@ void NAND_WriteByte(uint8_t data) {
     if (pa_set) PIOA_REGS->PIO_SODR = pa_set;
     if (pa_clr) PIOA_REGS->PIO_CODR = pa_clr;
 
-    /* 3. Toggle WE# con protezione interrupt */
+    /* 3. Tira WE# con isolamento degli interrupt ARM */
     __disable_irq();
     NAND_WE_Clear(); 
     for(volatile int d = 0; d < 30; d++); 
@@ -59,12 +70,12 @@ void NAND_WriteByte(uint8_t data) {
 uint8_t NAND_ReadByte(void) {
     uint8_t data = 0;
 
-    /* 1. Force pins to INPUT mode */
+    /* 1. Forza i pin in modalità INPUT */
     PIOD_REGS->PIO_ODR = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
     PIOC_REGS->PIO_ODR = (1UL << 6) | (1UL << 5);
     PIOA_REGS->PIO_ODR = (1UL << 24) | (1UL << 25);
 
-    /* 2. Pull OE# LOW e blinda interrupt */
+    /* 2. Porta OE# LOW e scherma gli interrupt */
     __disable_irq();
     NAND_OE_Clear();
     for(volatile int d = 0; d < 30; d++); 
@@ -111,32 +122,41 @@ void NAND_Address(uint8_t addr) {
 // 3. HARDWARE NAND DRIVERS 
 // =============================================================================
 
-void HW_NAND_Wait_Ready(void) {
-    /* 1. tWB Delay: Wait ~2 microseconds for NAND to pull R/B# LOW */
+void HW_NAND_Wait_Ready(bool restore_read_mode) {
+    /* 1. Ritardo tWB: Attesa per consentire alla NAND di entrare in BUSY */
     for(volatile uint32_t d = 0; d < 1000; d++) { asm("nop"); }
     
-    /* 2. Now wait for the flash to finish and release the R/B# line HIGH */
-    while(F3_RB_Get() == 0) {}
+    /* 2. Polling del Registro di Stato 0x70 (Risolve l'instabilità del pin R/B#) */
+    uint8_t status = 0;
+    do {
+        NAND_Command(0x70);
+        status = NAND_ReadByte();
+    } while ((status & 0x40) == 0);
     
-    /* 3. tRR Delay: Wait ~50ns after it goes high before dropping RE# */
+    /* 3. Se eseguito durante una lettura dati, riposiziona il puntatore interno (0x00) */
+    if (restore_read_mode) {
+        NAND_Command(0x00);
+    }
+    
+    /* 4. Ritardo tRR */
     for(volatile uint32_t d = 0; d < 50; d++) { asm("nop"); }
 }
 
 void HW_NAND_Erase_Block(uint32_t block_address) {
     CE_F3_Clear();
     
-    NAND_Command(0x60); // Block Erase Setup command
+    NAND_Command(0x60); 
     
-    /* Calculate the row address for the block (assuming 256 pages per block) */
+    /* Calcolo dell'indirizzo di riga (Assumendo 256 pagine per blocco) */
     uint32_t row = (block_address << 8); 
     
     NAND_Address(row & 0xFF);         
     NAND_Address((row >> 8) & 0xFF);  
     NAND_Address((row >> 16) & 0xFF); 
     
-    NAND_Command(0xD0); // Block Erase Confirm command
+    NAND_Command(0xD0); 
     
-    HW_NAND_Wait_Ready(); 
+    HW_NAND_Wait_Ready(false); 
     CE_F3_Set();
 }
 
@@ -163,7 +183,7 @@ void HW_NAND_Write_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* pa
     }
 
     NAND_Command(0x10); 
-    HW_NAND_Wait_Ready(); 
+    HW_NAND_Wait_Ready(false); 
     CE_F3_Set(); 
 }
 
@@ -178,7 +198,7 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     NAND_Address((page_address >> 16) & 0xFF); 
 
     NAND_Command(0x30); 
-    HW_NAND_Wait_Ready(); 
+    HW_NAND_Wait_Ready(true); // Ripristina la modalità lettura inviando 0x00
 
     for(uint32_t i = 0; i < PAYLOAD_SIZE_BYTES; i++) {
         payload[i] = NAND_ReadByte();
@@ -189,7 +209,9 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     NAND_Address(0x10); 
     NAND_Command(0xE0); 
 
-    HW_NAND_Wait_Ready(); 
+    /* NOTA CRITICA: Nessun Wait_Ready dopo E0h perché il chip non va in BUSY.
+       È sufficiente un piccolissimo ritardo hardware per stabilizzare la linea. */
+    for(volatile uint32_t d = 0; d < 50; d++) { asm("nop"); }
 
     for(uint32_t i = 0; i < PARITY_SIZE_BYTES; i++) {
         parity[i] = NAND_ReadByte();
@@ -207,7 +229,7 @@ uint8_t CACHE_ALIGN tx_buffer[CODEWORD_SIZE_BYTES + 2];
 uint8_t codeword_buffer[CODEWORD_SIZE_BYTES];
 uint8_t flash_read_buffer[CODEWORD_SIZE_BYTES];
 uint32_t current_nand_page = 0x00000000; 
-bool block_erased = false; // NEW: Track if we've formatted the test block
+bool block_erased = false; 
 
 void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips) {
     if (num_flips == 0) return;
@@ -231,16 +253,19 @@ void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips) {
 
 int main ( void )
 {
-    /* Initialize all modules */
+    /* Inizializzazione globale di tutti i moduli di sistema */
     SYS_Initialize ( NULL );
     
+    /* Configurazione e attivazione alimentazione NAND tramite pin PB1 */
     PMC_REGS->PMC_PCER0 = (1UL << 11);
     PIOB_REGS->PIO_WPMR = (0x50494FUL << 8);
     PIOB_REGS->PIO_OER = (1UL << 1);
     PIOB_REGS->PIO_SODR = (1UL << 1);
     for(volatile int d = 0; d < 100000; d++) { asm("nop"); }
+    
+    /* Sveglia il chip subito dopo aver dato corrente */
     NAND_Command(0xFF);
-    HW_NAND_Wait_Ready();
+    HW_NAND_Wait_Ready(false);
 
     srand(12345);
     gf2_initialize();
@@ -255,16 +280,13 @@ int main ( void )
 
     while ( true )
     {
-        /* Maintain state machines of all polled MPLAB Harmony modules. */
+        /* Esegue i task in background dei moduli gestiti da Harmony */
         SYS_Tasks ( );
 
-        /* Let app.c handle the physical USB connection to Windows.
-           Once it successfully configures the COM ports, we hijack the data flow. */
         if (appData.isConfigured == true)
         {
-            /* FREEZE APP.C: We force app.c's background task into an error state.
-               This prevents it from stealing our USB payload, but leaves its safe
-               Windows kernel handlers perfectly intact! */
+            /* HIJACK DEL PROTOCOLLO: Blocca lo stato di app.c per impedire
+               che sottragga i pacchetti USB dalla nostra routine personalizzata */
             appData.state = APP_STATE_ERROR;
 
             switch(customState) {
@@ -282,9 +304,9 @@ int main ( void )
                     break;
 
                 case PROCESS_DATA:
-                    /* Format the block before the very first write */
+                    /* Formatta il blocco prima di effettuare la prima scrittura */
                     if (!block_erased) {
-                        HW_NAND_Erase_Block(0); // Erase Block 0
+                        HW_NAND_Erase_Block(0); 
                         block_erased = true;
                     }
 
@@ -294,7 +316,7 @@ int main ( void )
                     HW_NAND_Write_Codeword(current_nand_page, codeword_buffer, &codeword_buffer[PAYLOAD_SIZE_BYTES]);
                     HW_NAND_Read_Codeword(current_nand_page, flash_read_buffer, &flash_read_buffer[PAYLOAD_SIZE_BYTES]);
 
-                    /* Move to the next page in the block for the next packet! */
+                    /* Avanza alla pagina successiva del blocco per il prossimo pacchetto */
                     current_nand_page++; 
 
                     uint8_t crc_status = 0;
@@ -325,6 +347,5 @@ int main ( void )
         }
     }
 
-    /* Execution should not come here during normal operation */
     return ( EXIT_FAILURE );
 }

@@ -3,11 +3,11 @@ import time
 import random
 
 # --- Configuration ---
-COM_PORT       = r'\\.\COM17'
+COM_PORT       = r'\\.\COM13'
 BAUD_RATE      = 9600
 SEND_SIZE      = 512  
 RESPONSE_SIZE  = 522   # 512 payload + 8 parity + 1 BCH status + 1 CRC status
-NUM_WORDS      = 1000
+NUM_WORDS      = 10
 
 def main():
     print(f"Opening {COM_PORT} at {BAUD_RATE} baud...")
@@ -62,7 +62,8 @@ def main():
 
                 status_str = (f"BCH={bch_status:+d}  CRC={'OK' if crc_ok else 'FAIL'}"
                               f"  payload={'OK' if match else f'MISMATCH({diff}B)'}")
-                # print(f"[{i+1:3d}]  {status_str}")
+                print("sent word:", payload.hex()[:32] + "..." if SEND_SIZE > 16 else payload.hex())
+                print("received word:", received_payload.hex()[:32] + "..." if SEND_SIZE > 16 else received_payload.hex())
 
             elapsed = time.time() - start
             tp = (NUM_WORDS * SEND_SIZE) / elapsed / 1024

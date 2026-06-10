@@ -800,7 +800,7 @@ void APP_Initialize(void)
 
     /* Issue mandatory power-on RESET to flash F3.
        PIO_Initialize() must have already been called by SYS_Initialize(). */
-    NAND_Reset();
+//    NAND_Reset();
 }
 
 
