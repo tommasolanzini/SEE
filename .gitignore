@@ -14,3 +14,5 @@ nbproject/private/
 *.log.inx
 mcc-manifest-autosave.yml
 .vscode/
+Test_Output/*
+*.mp3
