@@ -4,7 +4,8 @@
 #include <stdint.h>
 #include "definitions.h" 
 #include "app.h"         // Consente di leggere i flag USB di app.c
-#include "gf2_poly.h"
+/* NOTA: il path BCH/CRC (gf2_poly) e' disattivato in questa build di test:
+   stiamo verificando solo l'integrita' del link PC-MCU-NAND, senza logica. */
 
 // Recupera la struttura appData definita in app.c per gestirne lo stato
 extern APP_DATA appData;
@@ -13,8 +14,6 @@ extern APP_DATA appData;
 #define PAYLOAD_SIZE_BYTES 512 
 #define PARITY_SIZE_BYTES 8      // BCH + CRC
 #define CODEWORD_SIZE_BYTES (PAYLOAD_SIZE_BYTES + PARITY_SIZE_BYTES) // 520 byte total
-
-volatile uint8_t TARGET_BIT_FLIPS = 0; 
 
 // --- Prototipi delle funzioni per evitare dichiarazioni implicite ---
 void NAND_WriteByte(uint8_t data);
@@ -25,8 +24,6 @@ void HW_NAND_Wait_Ready(bool restore_read_mode);
 void HW_NAND_Erase_Block(uint32_t block_address);
 void HW_NAND_Write_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
 void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
-void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips);
-/* gf2_extract_payload è dichiarata in gf2_poly.h (linkage C). */
 
 // =============================================================================
 // 1. BIT-BANGING ENGINES (OPTIMIZED DIRECT REGISTER ACCESS)
@@ -233,26 +230,6 @@ uint32_t current_nand_page = 0x00000000;
 uint32_t current_block     = 0x00000000;
 bool block_erased = false;
 
-void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips) {
-    if (num_flips == 0) return;
-    uint32_t total_bits = byte_length * 8;
-    uint32_t flipped_positions[4] = {0}; 
-    uint8_t flips_applied = 0;
-
-    while (flips_applied < num_flips) {
-        uint32_t bit_idx = rand() % total_bits;
-        bool already_flipped = false;
-        for (uint8_t i = 0; i < flips_applied; i++) {
-            if (flipped_positions[i] == bit_idx) { already_flipped = true; break; }
-        }
-        if (!already_flipped) {
-            flipped_positions[flips_applied] = bit_idx;
-            codeword[bit_idx / 8] ^= (1 << (bit_idx % 8));
-            flips_applied++;
-        }
-    }
-}
-
 int main ( void )
 {
     /* Inizializzazione globale di tutti i moduli di sistema */
@@ -268,9 +245,6 @@ int main ( void )
     /* Sveglia il chip subito dopo aver dato corrente */
     NAND_Command(0xFF);
     HW_NAND_Wait_Ready(false);
-
-    srand(12345);
-    gf2_initialize();
 
     enum {
         WAIT_FOR_READ_TRIGGER,
@@ -317,39 +291,37 @@ int main ( void )
                         block_erased  = true;
                     }
 
-                    gf2_encode_data(rx_buffer, PAYLOAD_SIZE_BYTES, codeword_buffer);
-                    inject_errors(codeword_buffer, CODEWORD_SIZE_BYTES, TARGET_BIT_FLIPS);
+                    /* === TEST LINK GREZZO: niente BCH/CRC, niente bit-flip ===
+                       I 512 byte ricevuti dall'host vengono scritti TALI E QUALI
+                       nell'area dati della NAND. Gli 8 byte di spare li azzeriamo:
+                       servono solo a mantenere identica la sequenza di comandi ONFI
+                       del path gia' collaudato (write/read con 0x85 / 0x05 / 0xE0). */
+                    for (uint32_t i = 0; i < PAYLOAD_SIZE_BYTES; i++) {
+                        codeword_buffer[i] = rx_buffer[i];
+                    }
+                    for (uint32_t i = 0; i < PARITY_SIZE_BYTES; i++) {
+                        codeword_buffer[PAYLOAD_SIZE_BYTES + i] = 0x00;
+                    }
 
                     HW_NAND_Write_Codeword(current_nand_page, codeword_buffer, &codeword_buffer[PAYLOAD_SIZE_BYTES]);
                     HW_NAND_Read_Codeword(current_nand_page, flash_read_buffer, &flash_read_buffer[PAYLOAD_SIZE_BYTES]);
 
                     /* Avanza alla pagina successiva del blocco per il prossimo pacchetto */
-                    current_nand_page++; 
+                    current_nand_page++;
 
-                    uint8_t crc_status = 0;
-                    int bch_status = gf2_correct_errors(flash_read_buffer, CODEWORD_SIZE_BYTES, &crc_status);
-
-                    /* Estrae il payload corretto nei primi 512 byte della risposta.
-                       ATTENZIONE: il payload NON sono i primi 512 byte del codeword
-                       (e' spostato in alto di 58 bit = 26 BCH + 32 CRC); senza questo
-                       passaggio l'host vedeva "corruzione" totale anche con 0 errori. */
-                    gf2_extract_payload(flash_read_buffer, CODEWORD_SIZE_BYTES,
-                                        tx_buffer, PAYLOAD_SIZE_BYTES);
-
-                    /* Gli 8 byte di parita' = i byte bassi del codeword (regione BCH+CRC). */
-                    for(int i = 0; i < PARITY_SIZE_BYTES; i++) {
-                        tx_buffer[PAYLOAD_SIZE_BYTES + i] = flash_read_buffer[i];
+                    /* Rispedisce all'host i 512 byte riletti dalla NAND, senza alcuna
+                       elaborazione: e' l'host a confrontare sent vs recv per giudicare
+                       se il path PC-MCU-NAND e' pulito. */
+                    for (uint32_t i = 0; i < PAYLOAD_SIZE_BYTES; i++) {
+                        tx_buffer[i] = flash_read_buffer[i];
                     }
 
-                    tx_buffer[CODEWORD_SIZE_BYTES]     = (uint8_t)bch_status;
-                    tx_buffer[CODEWORD_SIZE_BYTES + 1] = crc_status;
-                    
                     customState = SEND_MESSAGE;
                     break;
 
                 case SEND_MESSAGE:
                     appData.appCOMPortObjects[0].isWriteComplete = false;
-                    if (USB_DEVICE_CDC_Write(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].writeTransferHandle, tx_buffer, CODEWORD_SIZE_BYTES + 2, USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE) == USB_DEVICE_CDC_RESULT_OK) {
+                    if (USB_DEVICE_CDC_Write(USB_DEVICE_CDC_INDEX_0, &appData.appCOMPortObjects[0].writeTransferHandle, tx_buffer, PAYLOAD_SIZE_BYTES, USB_DEVICE_CDC_TRANSFER_FLAGS_DATA_COMPLETE) == USB_DEVICE_CDC_RESULT_OK) {
                         customState = WAIT_FOR_WRITE_COMPLETE;
                     }
                     break;

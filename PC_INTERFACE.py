@@ -8,12 +8,12 @@ from datetime import datetime
 # from playsound import playsound
 
 # --- Configuration ---
-COM_PORT       = r'\\.\COM17'
-BAUD_RATE      = 9600   
-SEND_SIZE      = 512
-RESPONSE_SIZE  = 522   # 512 payload + 8 parity + 1 BCH status + 1 CRC status
-NUM_WORDS      = 10000
-OUTPUT_DIR     = os.path.join(".", "Test_Output")
+COM_PORT      = r'\\.\COM13'
+BAUD_RATE     = 9600
+WORD_SIZE     = 512    # bytes sent to the MCU per word
+RESPONSE_SIZE = 512    # bytes echoed back: raw NAND read-back, no BCH/CRC, no status
+NUM_WORDS     = 10
+OUTPUT_DIR    = os.path.join(".", "Test_Output")
 
 
 def save_results(rows,i):
@@ -27,123 +27,114 @@ def save_results(rows,i):
 
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(["word_index", "bch_status", "crc", "payload_match",
-                    "diff_bytes", "sent_word_hex", "corrected_word_hex"])
+        w.writerow(["word_index", "result", "diff_bytes", "first_diff_byte",
+                    "sent_word_hex", "recv_word_hex"])
         for r in rows:
-            w.writerow([r["idx"], r["bch"],
-                        "OK" if r["crc_ok"] else "FAIL",
-                        "OK" if r["match"] else "MISMATCH",
-                        r["diff"], r["sent"], r["recv"]])
+            w.writerow([r["idx"], r["result"], r["diff"], r["first"],
+                        r["sent"], r["recv"]])
     print(f"Saved {len(rows)} rows -> {path}")
 
 
 def main():
+    # RAW LINK INTEGRITY TEST (PC <-> MCU <-> NAND):
+    #   - No bit-flips injected, no BCH/CRC logic on the MCU.
+    #   - The PC sends 512 random bytes; the MCU writes them verbatim to a NAND
+    #     page, reads them straight back, and echoes the 512 bytes unchanged.
+    #   - A clean link means recv == sent for every word.
     print(f"Opening {COM_PORT} at {BAUD_RATE} baud...")
-    for j in range(4,15):
-        rows = []
-        try:
-            with serial.Serial(COM_PORT, BAUD_RATE, timeout=2.0, write_timeout=2.0) as ser:
-                print("Port opened. Waiting for USB stack to settle...")
-                time.sleep(1.0)
-                ser.reset_input_buffer()
-                ser.reset_output_buffer()
-                print(f"Starting stress test: {NUM_WORDS} words\n")
+    rows = []
+    try:
+        with serial.Serial(COM_PORT, BAUD_RATE, timeout=2.0, write_timeout=2.0) as ser:
+            print("Port opened. Waiting for USB stack to settle...")
+            time.sleep(1.0)
+            ser.reset_input_buffer()
+            ser.reset_output_buffer()
+            print(f"Starting RAW link test (no BCH, no flips): {NUM_WORDS} words\n")
 
-                ok = bch_corrections = bch_failures = crc_errors = payload_mismatches = 0
-                start = time.time()
+            ok = mismatches = short = 0
+            total_diff = 0
+            start = time.time()
 
-                for i in range(NUM_WORDS):
-                    payload = bytearray(random.getrandbits(8) for _ in range(SEND_SIZE))
+            for i in range(NUM_WORDS):
+                payload = bytearray(random.getrandbits(8) for _ in range(WORD_SIZE))
 
-                    try:
-                        ser.write(payload)
-                    except serial.SerialTimeoutException:
-                        print(f"[{i+1}] Write timeout — MCU stopped listening.")
-                        break
+                try:
+                    ser.write(payload)
+                except serial.SerialTimeoutException:
+                    print(f"[{i+1}] Write timeout - MCU stopped listening.")
+                    break
 
-                    resp = ser.read(RESPONSE_SIZE)
-                    if len(resp) != RESPONSE_SIZE:
-                        print(f"[{i+1}] Short response: {len(resp)}/{RESPONSE_SIZE} bytes")
-                        continue
-
-                    ok += 1
-
-                    # ── Decoding ────────────────────────────────────────────────
-                    # The firmware does NOT ship the raw codeword: it runs the BCH/CRC
-                    # decode on-chip and returns the already-decoded, byte-aligned
-                    # payload in the first 512 bytes, then 8 parity bytes, then the
-                    # BCH status byte and the CRC status byte.
-                    # (The codeword itself is bit-systematic, not byte-systematic:
-                    #  the payload is shifted up by 58 bits, so resp[:512] of the raw
-                    #  codeword would NOT be the payload — see gf2_extract_payload.)
-                    received_payload = bytes(resp[:512])
-                    received_parity  = bytes(resp[512:520])
-                    bch_raw          = resp[520]
-                    crc_raw          = resp[521]
-                    bch_status       = bch_raw if bch_raw < 128 else bch_raw - 256  # signed
-                    crc_ok           = (crc_raw == 1)
-
-                    if bch_status > 0:
-                        bch_corrections += 1
-                    elif bch_status < 0:
-                        bch_failures += 1
-                    if not crc_ok:
-                        crc_errors += 1
-
-                    match = (bytes(payload) == received_payload)
-                    diff  = 0
-                    if not match:
-                        payload_mismatches += 1
-                        diff = sum(a != b for a, b in zip(payload, received_payload))
-
-                    status_str = (f"BCH={bch_status:+d}  CRC={'OK' if crc_ok else 'FAIL'}"
-                                f"  payload={'OK' if match else f'MISMATCH({diff}B)'}")
-                    sent_hex = payload.hex()[:32] + "..." if SEND_SIZE > 16 else payload.hex()
-                    recv_hex = received_payload.hex()[:32] + "..." if SEND_SIZE > 16 else received_payload.hex()
-                    # print(f"[{i+1:2}] sent: {sent_hex}")
-                    # print(f"     recv: {recv_hex}   {status_str}")
-
-                    # Collect the full-word result for optional CSV export.
+                resp = ser.read(RESPONSE_SIZE)
+                if len(resp) != RESPONSE_SIZE:
+                    print(f"[{i+1}] Short response: {len(resp)}/{RESPONSE_SIZE} bytes")
+                    short += 1
                     rows.append({
-                        "idx":    i + 1,
-                        "sent":   bytes(payload).hex(),
-                        "recv":   received_payload.hex(),
-                        "bch":    bch_status,
-                        "crc_ok": crc_ok,
-                        "match":  match,
-                        "diff":   diff,
+                        "idx": i + 1, "result": "SHORT", "diff": -1, "first": -1,
+                        "sent": bytes(payload).hex(), "recv": bytes(resp).hex(),
                     })
+                    continue
 
-                elapsed = time.time() - start
-                tp = (NUM_WORDS * SEND_SIZE) / elapsed / 1024
+                ok += 1
+                received = bytes(resp)
 
-                print("\n" + "=" * 42)
-                print("  EDAC STRESS TEST RESULTS")
-                print("=" * 42)
-                print(f"Elapsed Time:          {elapsed:.2f} s")
-                print(f"Throughput:            {tp:.2f} KB/s")
-                print(f"Packets received:      {ok} / {NUM_WORDS}")
-                print(f"Payload mismatches:    {payload_mismatches}")
-                print(f"BCH corrections:       {bch_corrections}")
-                print(f"BCH failures:          {bch_failures}")
-                print(f"CRC errors:            {crc_errors}")
-                print("=" * 42)
+                match = (bytes(payload) == received)
+                diff  = 0
+                first = -1
+                if not match:
+                    mismatches += 1
+                    for idx, (a, b) in enumerate(zip(payload, received)):
+                        if a != b:
+                            diff += 1
+                            if first < 0:
+                                first = idx
+                    total_diff += diff
 
-        except serial.SerialException as e:
-            print(f"Cannot open port: {e}")
-            return
-        except KeyboardInterrupt:
-            print("\nAborted.")
-            return
-        # sound_path = os.path.abspath('Dolci_Peccati.mp3')
-        # playsound(sound_path)
-        # ── Optional CSV export ──────────────────────────────────────────────────
-        if rows:
-            # answer = input("\nSave results to CSV? (y/n): ").strip().lower()
-            # if answer in ("y", "yes"):
-            save_results(rows, j)
-            # else:
-            #     print("Results not saved.")
+                status_str = "MATCH" if match else f"MISMATCH ({diff}B, first@{first})"
+                sent_hex = payload.hex()[:32] + "..."
+                recv_hex = received.hex()[:32] + "..."
+                print(f"[{i+1:2}] sent: {sent_hex}")
+                print(f"     recv: {recv_hex}   {status_str}")
+
+                rows.append({
+                    "idx":    i + 1,
+                    "result": "MATCH" if match else "MISMATCH",
+                    "diff":   diff,
+                    "first":  first,
+                    "sent":   bytes(payload).hex(),
+                    "recv":   received.hex(),
+                })
+
+            elapsed = time.time() - start
+            tp = (NUM_WORDS * WORD_SIZE) / elapsed / 1024 if elapsed > 0 else 0
+
+            clean = (mismatches == 0 and short == 0 and ok == NUM_WORDS)
+
+            print("\n" + "=" * 42)
+            print("  RAW LINK TEST RESULTS (PC-MCU-NAND)")
+            print("=" * 42)
+            print(f"Elapsed Time:          {elapsed:.2f} s")
+            print(f"Throughput:            {tp:.2f} KB/s")
+            print(f"Words round-tripped:   {ok} / {NUM_WORDS}")
+            print(f"Short responses:       {short}")
+            print(f"Payload mismatches:    {mismatches}")
+            print(f"Total differing bytes: {total_diff}")
+            print(f"Link verdict:          {'CLEAN' if clean else 'DIRTY (see above)'}")
+            print("=" * 42)
+
+    except serial.SerialException as e:
+        print(f"Cannot open port: {e}")
+        return
+    except KeyboardInterrupt:
+        print("\nAborted.")
+        return
+
+    # -- Optional CSV export --------------------------------------------------
+    if rows:
+        answer = input("\nSave results to CSV? (y/n): ").strip().lower()
+        if answer in ("y", "yes"):
+            save_results(rows)
+        else:
+            print("Results not saved.")
 
 
 if __name__ == '__main__':
