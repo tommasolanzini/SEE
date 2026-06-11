@@ -1,34 +1,9 @@
 """
 ANALYZE_DR_FLIPS.py
 
-Aggregates the per-word results of the DryRun (DR) link-integrity campaign and
-recovers the distribution of bit-flips seen on the PC-MCU-NAND path
-(e.g. flips induced by radiation during a SEE run).
-
-It scans  .\\Test_Output\\  for the CSV files written by
-PC_INTERFACE.save_results, one per run, named
-
-    Test_<DD_MM_YYYY>_DR_<N>.csv      with  N = 1 .. 15
-
-For every word in every run it counts the EXACT number of flipped BITS as
-
-    popcount( sent_word_hex  XOR  recv_word_hex )
-
-The CSV's `diff_bytes` column only says how many *bytes* changed, not how many
-*bits*, so we recompute from the stored hex to stay bit-accurate.
-
-Why a 2-D array (word x run) and not a single per-word total?
-    Keeping one number per (word, run) is what lets us recover the *distribution*
-    afterwards. A per-word total of 3 over 15 runs could be one run with 3 flips
-    or three runs with 1 flip each -- two very different distributions. The 2-D
-    array preserves both; the totals are just a derived column.
-
-Outputs (written next to the inputs, in .\\Test_Output\\):
-    * flips_matrix_DR.csv         rows = word_index, cols = DR_1..DR_15,
-                                  cell = #bit-flips ('' = absent, 'SHORT' = unusable)
-    * flips_distribution_DR.csv   k, word_count, fraction
-                                  -> how many word-observations had exactly k flips
-and prints the distribution (0-flip / 1-flip / ...) to the console.
+Aggregates the per-word results of the DryRun (DR) link-integrity campaign.
+Calculates error distributions across runs, prints mean/std dev percentages, 
+and displays a boxplot natively.
 """
 
 import os
@@ -37,23 +12,30 @@ import csv
 import glob
 from collections import defaultdict
 
+try:
+    import matplotlib.pyplot as plt
+    import numpy as np
+except ImportError:
+    print("ERROR: This script requires matplotlib and numpy.")
+    print("Run: pip install matplotlib numpy")
+    exit(1)
+
 # --- Configuration ----------------------------------------------------------
 OUTPUT_DIR = os.path.join(".", "Test_Output")
 ID_PREFIX  = "DR"          # test IDs are DR_1 .. DR_<N_MAX>
 N_MIN      = 1
-N_MAX      = 15
+N_MAX      = 30
 SHORT_FLAG = -1            # sentinel kept in the matrix for SHORT / unusable rows
 
 MATRIX_CSV = os.path.join(OUTPUT_DIR, "flips_matrix_DR.csv")
 DIST_CSV   = os.path.join(OUTPUT_DIR, "flips_distribution_DR.csv")
 
-# Per-byte popcount lookup (version-independent, fast enough for offline use).
+# Per-byte popcount lookup
 _POP = bytes(bin(i).count("1") for i in range(256))
 
 
 def bit_flips(sent_hex, recv_hex):
-    """Exact number of differing BITS between two hex strings.
-    Returns None when the two cannot be compared (missing / unequal length)."""
+    """Exact number of differing BITS between two hex strings."""
     if not sent_hex or not recv_hex:
         return None
     try:
@@ -67,10 +49,7 @@ def bit_flips(sent_hex, recv_hex):
 
 
 def collect_run_files():
-    """Map run number -> csv path for every  Test_*_DR_<n>.csv  in OUTPUT_DIR.
-
-    The trailing  _DR_<n>.csv  is anchored with a regex so DR_1 does not also
-    grab DR_10..DR_15, and so the (variable) date prefix is ignored."""
+    """Map run number -> csv path for every  Test_*_DR_<n>.csv  in OUTPUT_DIR."""
     rx = re.compile(rf"_{ID_PREFIX}_(\d+)\.csv$", re.IGNORECASE)
     found = defaultdict(list)
     pattern = os.path.join(OUTPUT_DIR, f"Test_*_{ID_PREFIX}_*.csv")
@@ -82,8 +61,7 @@ def collect_run_files():
     runs = {}
     for n, paths in found.items():
         if len(paths) > 1:
-            print(f"  WARNING: DR_{n} matches {len(paths)} files; "
-                  f"using '{os.path.basename(paths[-1])}'")
+            print(f"  WARNING: DR_{n} matches {len(paths)} files; using latest.")
         runs[n] = paths[-1]
     return runs
 
@@ -91,14 +69,15 @@ def collect_run_files():
 def main():
     runs = collect_run_files()
     if not runs:
-        print(f"No DR campaign files found in '{OUTPUT_DIR}' "
-              f"(expected Test_*_{ID_PREFIX}_<N>.csv).")
+        print(f"No DR campaign files found in '{OUTPUT_DIR}'.")
         return
 
-    # flips_by_word[word_index] -> { run_n : bit_flip_count | SHORT_FLAG }
     flips_by_word = defaultdict(dict)
-    # distribution[k] -> number of word-observations with exactly k bit-flips
-    distribution = defaultdict(int)
+    
+    # Track distributions PER RUN for the boxplot and std dev math
+    dist_per_run = {n: defaultdict(int) for n in range(N_MIN, N_MAX + 1)}
+    total_per_run = {n: 0 for n in range(N_MIN, N_MAX + 1)}
+    
     short_rows = 0
     total_obs  = 0
     max_word   = 0
@@ -108,15 +87,12 @@ def main():
     for n in range(N_MIN, N_MAX + 1):
         path = runs.get(n)
         if path is None:
-            print(f"  DR_{n:<2}: MISSING (skipped)")
             continue
         present_runs.append(n)
 
-        rows_seen = 0
         with open(path, newline="") as f:
             reader = csv.DictReader(f)
             for r in reader:
-                rows_seen += 1
                 try:
                     widx = int(r["word_index"])
                 except (KeyError, ValueError, TypeError):
@@ -132,77 +108,97 @@ def main():
                     continue
 
                 flips_by_word[widx][n] = nf
-                distribution[nf] += 1
+                dist_per_run[n][nf] += 1
+                total_per_run[n] += 1
                 total_obs += 1
 
-        print(f"  DR_{n:<2}: {rows_seen:>6} words   ({os.path.basename(path)})")
-
     if total_obs == 0:
-        print("\nNo usable word-observations found -- nothing to aggregate.")
+        print("\nNo usable word-observations found.")
         return
 
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+# --- Math: Mean and Std Dev across the tests ---
+    pct_0 = []
+    pct_1 = []
+    pct_2 = []
+    pct_3 = []
+    pct_m = []
 
-    # --- Write the per-word flip matrix (the 'array' requested) --------------
-    run_cols = list(range(N_MIN, N_MAX + 1))
-    with open(MATRIX_CSV, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["word_index"] + [f"{ID_PREFIX}_{n}" for n in run_cols]
-                   + ["total_flips", "runs_hit"])
-        for widx in range(1, max_word + 1):
-            per_run = flips_by_word.get(widx, {})
-            cells, total, hits = [], 0, 0
-            for n in run_cols:
-                v = per_run.get(n)
-                if v is None:
-                    cells.append("")            # run absent or word not present
-                elif v == SHORT_FLAG:
-                    cells.append("SHORT")
-                else:
-                    cells.append(v)
-                    total += v
-                    if v > 0:
-                        hits += 1
-            w.writerow([widx] + cells + [total, hits])
+    for n in present_runs:
+        tot = total_per_run[n]
+        if tot == 0: continue
+        
+        c0 = dist_per_run[n].get(0, 0)
+        c1 = dist_per_run[n].get(1, 0)
+        c2 = dist_per_run[n].get(2, 0)
+        c3 = dist_per_run[n].get(3, 0)
+        cm = sum(c for k, c in dist_per_run[n].items() if k >= 3)
 
-    # --- Write the flip distribution ----------------------------------------
-    keys = sorted(set(distribution) | {0})       # always show the 0-flip row
-    with open(DIST_CSV, "w", newline="") as f:
-        w = csv.writer(f)
-        w.writerow(["bit_flips", "word_count", "fraction"])
-        for k in keys:
-            c = distribution.get(k, 0)
-            w.writerow([k, c, f"{c / total_obs:.8f}"])
+        pct_0.append((c0 / tot) * 100)
+        pct_1.append((c1 / tot) * 100)
+        pct_2.append((c2 / tot) * 100)
+        pct_3.append((c3 / tot) * 100)
+        pct_m.append((cm / tot) * 100)
 
-    # --- Console summary ----------------------------------------------------
-    untouched   = distribution.get(0, 0)
-    single      = distribution.get(1, 0)
-    multi       = total_obs - untouched - single
-    total_flips = sum(k * c for k, c in distribution.items())
+    mean_0, std_0 = np.mean(pct_0), np.std(pct_0)
+    mean_1, std_1 = np.mean(pct_1), np.std(pct_1)
+    mean_2, std_2 = np.mean(pct_2), np.std(pct_2)
+    mean_3, std_3 = np.mean(pct_3), np.std(pct_3)
+    mean_m, std_m = np.mean(pct_m), np.std(pct_m)
 
-    print(f"\nWrote per-word flip matrix -> {MATRIX_CSV}")
-    print(f"Wrote flip distribution    -> {DIST_CSV}")
+    print("\n" + "=" * 60)
+    print("  STATISTICHE ERRORI INIETTATI (MEDIA SUI 15 TEST)")
+    print("=" * 60)
+    print(f"{mean_0:>6.2f}% +- {std_0:<5.2f}%  hanno 0 errori")
+    print(f"{mean_1:>6.2f}% +- {std_1:<5.2f}%  hanno 1 errore")
+    print(f"{mean_2:>6.2f}% +- {std_2:<5.2f}%  hanno 2 errori")
+    print(f"{mean_3:>6.2f}% +- {std_3:<5.2f}%  hanno 3 errori")
+    print(f"{mean_m:>6.2f}% +- {std_m:<5.2f}%  hanno >2 errori")
+    print("=" * 60 + "\n")
 
-    print("\n" + "=" * 50)
-    print("  DR CAMPAIGN -- BIT-FLIP DISTRIBUTION")
-    print("=" * 50)
-    print(f"Runs analysed:        {present_runs}")
-    print(f"Word-observations:    {total_obs}")
-    print(f"SHORT/unusable rows:  {short_rows}")
-    print(f"Total bit-flips:      {total_flips}")
-    print(f"Untouched (0 flips):  {untouched}  ({untouched/total_obs:.2%})")
-    print(f"Single flip (1):      {single}  ({single/total_obs:.2%})")
-    print(f"Multi  flip (>=2):    {multi}  ({multi/total_obs:.2%})")
-    print("-" * 50)
-    print(f"{'bit-flips':>10} | {'words':>8} | fraction")
-    print("-" * 50)
-    for k in keys:
-        c = distribution.get(k, 0)
-        frac = c / total_obs
-        bar = "#" * int(round(frac * 30))
-        print(f"{k:>10} | {c:>8} | {frac:7.2%} {bar}")
-    print("=" * 50)
+    # --- Display Boxplot Natively (FIXED) ---
+    # Define our bins to prevent x-axis crowding
+    labels = ["0", "1", "2", "3", "4", ">= 5"]
+    
+    # Initialize an empty list for each bin to hold the counts from each test
+    data_for_box = [[] for _ in labels]
 
+    for n in present_runs:
+        c0 = dist_per_run[n].get(0, 0)
+        c1 = dist_per_run[n].get(1, 0)
+        c2 = dist_per_run[n].get(2, 0)
+        c3 = dist_per_run[n].get(3, 0)
+        c4 = dist_per_run[n].get(4, 0)
+        c5_plus = sum(c for k, c in dist_per_run[n].items() if k >= 5)
+
+        # Append this run's data into the respective bins
+        data_for_box[0].append(c0)
+        data_for_box[1].append(c1)
+        data_for_box[2].append(c2)
+        data_for_box[3].append(c3)
+        data_for_box[4].append(c4)
+        data_for_box[5].append(c5_plus)
+
+    plt.figure(figsize=(10, 6))
+    
+    # Create the boxplot
+    box = plt.boxplot(data_for_box, positions=range(len(labels)), 
+                      patch_artist=True, showmeans=True, 
+                      meanline=False, 
+                      boxprops=dict(facecolor="#ADD8E6", color="black"))
+    
+    plt.xticks(range(len(labels)), labels)
+    
+    # Only use log scale if there is actually data, otherwise it might throw a warning
+    plt.yscale("log") 
+    
+    plt.title("Distribuzione Numero di Errori (Bit-Flips) sulla Parola per Test", fontsize=14, fontweight="bold")
+    plt.xlabel("Errori sulla Parola (k)", fontsize=12)
+    plt.ylabel("Numero di Parole (Log Scale)", fontsize=12)
+    plt.grid(axis='y', linestyle='--', alpha=0.7)
+    
+    # Adjust layout so nothing gets cut off
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
     main()
