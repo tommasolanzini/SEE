@@ -4,14 +4,12 @@ import random
 import os
 import csv
 from datetime import datetime
-# import os
-# from playsound import playsound
 
 # --- Configuration ---
 BAUD_RATE      = 9600   
 SEND_SIZE      = 512
 RESPONSE_SIZE  = 522   # 512 payload + 8 parity + 1 BCH status + 1 CRC status
-NUM_WORDS      = 100000
+NUM_WORDS      = 1000
 OUTPUT_DIR     = os.path.join(".", "Test_Output")
 
 
@@ -19,10 +17,10 @@ def save_results(rows,i):
     """Write the collected per-word results to .\\Test_Output\\Test_DD_MM_YYYY_<ID>.csv"""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     date_str = datetime.now().strftime("%d_%m_%Y")
-    # raw_id   = input("Enter a test ID for the filename: ").strip()
-    raw_id   = f"0f_10k_MCU_{i}"
+    raw_id   = input("Enter a test ID for the filename: ").strip()
+    # raw_id   = f"0f_10k_MCU_{i}"
     test_id  = "".join(c for c in raw_id if c.isalnum() or c in ("-", "_")) or "run"
-    path     = os.path.join(OUTPUT_DIR, f"Test_{date_str}_{test_id}.csv")
+    path     = os.path.join(OUTPUT_DIR, f"TM_{date_str}_{test_id}.csv")
 
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
@@ -40,7 +38,7 @@ def main():
     COM_number = input("Insert Communication port number: ")
     COM_PORT = fr'\\.\COM{COM_number}'
     print(f"Opening {COM_PORT} at {BAUD_RATE} baud...")
-    for j in range(1,31):
+    for j in range(1,2):
         rows = []
         try:
             with serial.Serial(COM_PORT, BAUD_RATE, timeout=2.0, write_timeout=2.0) as ser:
@@ -69,7 +67,7 @@ def main():
 
                     ok += 1
 
-                    # ── Decoding ────────────────────────────────────────────────
+                    # Decoding
                     # The firmware does NOT ship the raw codeword: it runs the BCH/CRC
                     # decode on-chip and returns the already-decoded, byte-aligned
                     # payload in the first 512 bytes, then 8 parity bytes, then the
@@ -101,8 +99,6 @@ def main():
                                 f"  payload={'OK' if match else f'MISMATCH({diff}B)'}")
                     sent_hex = payload.hex()[:32] + "..." if SEND_SIZE > 16 else payload.hex()
                     recv_hex = received_payload.hex()[:32] + "..." if SEND_SIZE > 16 else received_payload.hex()
-                    # print(f"[{i+1:2}] sent: {sent_hex}")
-                    # print(f"     recv: {recv_hex}   {status_str}")
 
                     # Collect the full-word result for optional CSV export.
                     rows.append({
@@ -138,13 +134,12 @@ def main():
             return
         # sound_path = os.path.abspath('Dolci_Peccati.mp3')
         # playsound(sound_path)
-        # ── Optional CSV export ──────────────────────────────────────────────────
         if rows:
-            # answer = input("\nSave results to CSV? (y/n): ").strip().lower()
-            # if answer in ("y", "yes"):
-            save_results(rows, j)
-            # else:
-            #     print("Results not saved.")
+            answer = input("\nSave results to CSV? (y/n): ").strip().lower()
+            if answer in ("y", "yes"):
+                save_results(rows, j)
+            else:
+                print("Results not saved.")
 
 
 if __name__ == '__main__':
