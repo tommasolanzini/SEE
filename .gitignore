@@ -16,3 +16,5 @@ mcc-manifest-autosave.yml
 .vscode/
 Test_Output/*
 *.mp3
+__pycache__/*
+*.pyc
