@@ -4,6 +4,8 @@ import random
 import os
 import csv
 from datetime import datetime
+# import os
+# from playsound import playsound
 
 # --- Configuration ---
 BAUD_RATE      = 9600   
@@ -67,7 +69,7 @@ def main():
 
                     ok += 1
 
-                    # Decoding
+                    # ── Decoding ────────────────────────────────────────────────
                     # The firmware does NOT ship the raw codeword: it runs the BCH/CRC
                     # decode on-chip and returns the already-decoded, byte-aligned
                     # payload in the first 512 bytes, then 8 parity bytes, then the
@@ -99,6 +101,8 @@ def main():
                                 f"  payload={'OK' if match else f'MISMATCH({diff}B)'}")
                     sent_hex = payload.hex()[:32] + "..." if SEND_SIZE > 16 else payload.hex()
                     recv_hex = received_payload.hex()[:32] + "..." if SEND_SIZE > 16 else received_payload.hex()
+                    # print(f"[{i+1:2}] sent: {sent_hex}")
+                    # print(f"     recv: {recv_hex}   {status_str}")
 
                     # Collect the full-word result for optional CSV export.
                     rows.append({
@@ -134,6 +138,7 @@ def main():
             return
         # sound_path = os.path.abspath('Dolci_Peccati.mp3')
         # playsound(sound_path)
+        # ── Optional CSV export ──────────────────────────────────────────────────
         if rows:
             # answer = input("\nSave results to CSV? (y/n): ").strip().lower()
             # if answer in ("y", "yes"):

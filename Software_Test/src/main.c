@@ -3,20 +3,20 @@
 #include <stdlib.h>                     
 #include <stdint.h>
 #include "definitions.h" 
-#include "app.h"         // Consente di leggere i flag USB di app.c
+#include "app.h"         // Allows reading USB flags from app.c
 #include "gf2_poly.h"
 
-// Recupera la struttura appData definita in app.c per gestirne lo stato
+// Retrieves the appData structure defined in app.c to manage its state
 extern APP_DATA appData;
 
-// --- Dimensioni Payload e Parità ---
+// --- Payload and Parity Sizes ---
 #define PAYLOAD_SIZE_BYTES 512 
 #define PARITY_SIZE_BYTES 8      // BCH + CRC
-#define CODEWORD_SIZE_BYTES (PAYLOAD_SIZE_BYTES + PARITY_SIZE_BYTES) // 520 byte total
+#define CODEWORD_SIZE_BYTES (PAYLOAD_SIZE_BYTES + PARITY_SIZE_BYTES) // 520 bytes total
 
 volatile uint8_t TARGET_BIT_FLIPS = 0; 
 
-// --- Prototipi delle funzioni per evitare dichiarazioni implicite ---
+// --- Function prototypes to avoid implicit declarations ---
 void NAND_WriteByte(uint8_t data);
 uint8_t NAND_ReadByte(void);
 void NAND_Command(uint8_t cmd);
@@ -26,19 +26,19 @@ void HW_NAND_Erase_Block(uint32_t block_address);
 void HW_NAND_Write_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
 void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* parity);
 void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips);
-/* gf2_extract_payload è dichiarata in gf2_poly.h (linkage C). */
+/* gf2_extract_payload is declared in gf2_poly.h (C linkage). */
 
 // =============================================================================
 // 1. BIT-BANGING ENGINES (OPTIMIZED DIRECT REGISTER ACCESS)
 // =============================================================================
 
 void NAND_WriteByte(uint8_t data) {
-    /* 1. Forza i pin in modalità OUTPUT scavalcando le astrazioni di Harmony */
+    /* 1. Force pins to OUTPUT mode, bypassing Harmony abstractions */
     PIOD_REGS->PIO_OER = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
     PIOC_REGS->PIO_OER = (1UL << 6) | (1UL << 5);
     PIOA_REGS->PIO_OER = (1UL << 24) | (1UL << 25);
 
-    /* 2. Scrittura atomica e veloce sui registri per impostare il bus dati */
+    /* 2. Fast atomic write to registers to set up the data bus */
     uint32_t pd_set = 0U, pd_clr = 0U;
     if (data & 0x01U) pd_set |= (1UL << 25); else pd_clr |= (1UL << 25); 
     if (data & 0x02U) pd_set |= (1UL << 26); else pd_clr |= (1UL << 26); 
@@ -59,7 +59,7 @@ void NAND_WriteByte(uint8_t data) {
     if (pa_set) PIOA_REGS->PIO_SODR = pa_set;
     if (pa_clr) PIOA_REGS->PIO_CODR = pa_clr;
 
-    /* 3. Tira WE# con isolamento degli interrupt ARM */
+    /* 3. Pull WE# low with ARM interrupt isolation */
     __disable_irq();
     NAND_WE_Clear(); 
     for(volatile int d = 0; d < 30; d++); 
@@ -71,12 +71,12 @@ void NAND_WriteByte(uint8_t data) {
 uint8_t NAND_ReadByte(void) {
     uint8_t data = 0;
 
-    /* 1. Forza i pin in modalità INPUT */
+    /* 1. Force pins to INPUT mode */
     PIOD_REGS->PIO_ODR = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
     PIOC_REGS->PIO_ODR = (1UL << 6) | (1UL << 5);
     PIOA_REGS->PIO_ODR = (1UL << 24) | (1UL << 25);
 
-    /* 2. Porta OE# LOW e scherma gli interrupt */
+    /* 2. Pull OE# LOW and shield interrupts */
     __disable_irq();
     NAND_OE_Clear();
     for(volatile int d = 0; d < 30; d++); 
@@ -124,22 +124,22 @@ void NAND_Address(uint8_t addr) {
 // =============================================================================
 
 void HW_NAND_Wait_Ready(bool restore_read_mode) {
-    /* 1. Ritardo tWB: Attesa per consentire alla NAND di entrare in BUSY */
+    /* 1. tWB Delay: Wait to allow the NAND to enter BUSY state */
     for(volatile uint32_t d = 0; d < 1000; d++) { asm("nop"); }
     
-    /* 2. Polling del Registro di Stato 0x70 (Risolve l'instabilità del pin R/B#) */
+    /* 2. Status Register 0x70 polling (Resolves R/B# pin instability) */
     uint8_t status = 0;
     do {
         NAND_Command(0x70);
         status = NAND_ReadByte();
     } while ((status & 0x40) == 0);
     
-    /* 3. Se eseguito durante una lettura dati, riposiziona il puntatore interno (0x00) */
+    /* 3. If executed during a data read, reposition the internal pointer (0x00) */
     if (restore_read_mode) {
         NAND_Command(0x00);
     }
     
-    /* 4. Ritardo tRR */
+    /* 4. tRR delay */
     for(volatile uint32_t d = 0; d < 50; d++) { asm("nop"); }
 }
 
@@ -148,7 +148,7 @@ void HW_NAND_Erase_Block(uint32_t block_address) {
     
     NAND_Command(0x60); 
     
-    /* Calcolo dell'indirizzo di riga (Assumendo 256 pagine per blocco) */
+    /* Row address calculation (Assuming 256 pages per block) */
     uint32_t row = (block_address << 8); 
     
     NAND_Address(row & 0xFF);         
@@ -199,7 +199,7 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     NAND_Address((page_address >> 16) & 0xFF); 
 
     NAND_Command(0x30); 
-    HW_NAND_Wait_Ready(true); // Ripristina la modalità lettura inviando 0x00
+    HW_NAND_Wait_Ready(true); // Restore read mode by sending 0x00
 
     for(uint32_t i = 0; i < PAYLOAD_SIZE_BYTES; i++) {
         payload[i] = NAND_ReadByte();
@@ -210,8 +210,8 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     NAND_Address(0x10); 
     NAND_Command(0xE0); 
 
-    /* NOTA CRITICA: Nessun Wait_Ready dopo E0h perché il chip non va in BUSY.
-       È sufficiente un piccolissimo ritardo hardware per stabilizzare la linea. */
+    /* CRITICAL NOTE: No Wait_Ready after E0h because the chip doesn't go into BUSY.
+       A tiny hardware delay is enough to stabilize the line. */
     for(volatile uint32_t d = 0; d < 50; d++) { asm("nop"); }
 
     for(uint32_t i = 0; i < PARITY_SIZE_BYTES; i++) {
@@ -255,17 +255,17 @@ void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips) {
 
 int main ( void )
 {
-    /* Inizializzazione globale di tutti i moduli di sistema */
+    /* Global initialization of all system modules */
     SYS_Initialize ( NULL );
     
-    /* Configurazione e attivazione alimentazione NAND tramite pin PB1 */
+    /* Configuration and activation of NAND power supply via PB1 pin */
     PMC_REGS->PMC_PCER0 = (1UL << 11);
     PIOB_REGS->PIO_WPMR = (0x50494FUL << 8);
     PIOB_REGS->PIO_OER = (1UL << 1);
     PIOB_REGS->PIO_SODR = (1UL << 1);
     for(volatile int d = 0; d < 100000; d++) { asm("nop"); }
     
-    /* Sveglia il chip subito dopo aver dato corrente */
+    /* Wake up the chip immediately after powering up */
     NAND_Command(0xFF);
     HW_NAND_Wait_Ready(false);
 
@@ -282,13 +282,13 @@ int main ( void )
 
     while ( true )
     {
-        /* Esegue i task in background dei moduli gestiti da Harmony */
+        /* Execute background tasks of modules managed by Harmony */
         SYS_Tasks ( );
 
         if (appData.isConfigured == true)
         {
-            /* HIJACK DEL PROTOCOLLO: Blocca lo stato di app.c per impedire
-               che sottragga i pacchetti USB dalla nostra routine personalizzata */
+            /* PROTOCOL HIJACK: Lock the app.c state to prevent
+               it from stealing USB packets from our custom routine */
             appData.state = APP_STATE_ERROR;
 
             switch(customState) {
@@ -306,11 +306,11 @@ int main ( void )
                     break;
 
                 case PROCESS_DATA:
-                    /* La NAND va cancellata prima di (ri)programmare. current_nand_page
-                       e' un row address completo -> block = page >> 8 (256 pagine per
-                       blocco). Cancella il blocco la prima volta che lo si tocca, anche
-                       dopo il wrap a pagina 256 (altrimenti uno stress test lungo ricomincia
-                       a corrompere appena entra in un blocco non cancellato). */
+                    /* The NAND must be erased before (re)programming. current_nand_page
+                       is a complete row address -> block = page >> 8 (256 pages per
+                       block). Erase the block the first time it is touched, even
+                       after the wrap at page 256 (otherwise a long stress test starts
+                       corrupting as soon as it enters an unerased block). */
                     if (!block_erased || (current_nand_page >> 8) != current_block) {
                         current_block = current_nand_page >> 8;
                         HW_NAND_Erase_Block(current_block);
@@ -320,25 +320,26 @@ int main ( void )
                     gf2_encode_data(rx_buffer, PAYLOAD_SIZE_BYTES, codeword_buffer);
                     inject_errors(codeword_buffer, CODEWORD_SIZE_BYTES, TARGET_BIT_FLIPS);
 
-                    HW_NAND_Write_Codeword(current_nand_page, codeword_buffer, &codeword_buffer[PAYLOAD_SIZE_BYTES]);
-                    HW_NAND_Read_Codeword(current_nand_page, flash_read_buffer, &flash_read_buffer[PAYLOAD_SIZE_BYTES]);
+//                    HW_NAND_Write_Codeword(current_nand_page, codeword_buffer, &codeword_buffer[PAYLOAD_SIZE_BYTES]);
+//                    HW_NAND_Read_Codeword(current_nand_page, flash_read_buffer, &flash_read_buffer[PAYLOAD_SIZE_BYTES]);
+//                    flash_read_buffer = codeword_buffer;
 
-                    /* Avanza alla pagina successiva del blocco per il prossimo pacchetto */
-                    current_nand_page++; 
+                    /* Advance to the next page of the block for the next packet */
+//                    current_nand_page++; 
 
                     uint8_t crc_status = 0;
-                    int bch_status = gf2_correct_errors(flash_read_buffer, CODEWORD_SIZE_BYTES, &crc_status);
+                    int bch_status = gf2_correct_errors(codeword_buffer, CODEWORD_SIZE_BYTES, &crc_status);
 
-                    /* Estrae il payload corretto nei primi 512 byte della risposta.
-                       ATTENZIONE: il payload NON sono i primi 512 byte del codeword
-                       (e' spostato in alto di 58 bit = 26 BCH + 32 CRC); senza questo
-                       passaggio l'host vedeva "corruzione" totale anche con 0 errori. */
-                    gf2_extract_payload(flash_read_buffer, CODEWORD_SIZE_BYTES,
+                    /* Extract the corrected payload into the first 512 bytes of the response.
+                       WARNING: the payload is NOT the first 512 bytes of the codeword
+                       (it is shifted up by 58 bits = 26 BCH + 32 CRC); without this
+                       step the host would see total "corruption" even with 0 errors. */
+                    gf2_extract_payload(codeword_buffer, CODEWORD_SIZE_BYTES,
                                         tx_buffer, PAYLOAD_SIZE_BYTES);
 
-                    /* Gli 8 byte di parita' = i byte bassi del codeword (regione BCH+CRC). */
+                    /* The 8 parity bytes = the low bytes of the codeword (BCH+CRC region). */
                     for(int i = 0; i < PARITY_SIZE_BYTES; i++) {
-                        tx_buffer[PAYLOAD_SIZE_BYTES + i] = flash_read_buffer[i];
+                        tx_buffer[PAYLOAD_SIZE_BYTES + i] = codeword_buffer[i];
                     }
 
                     tx_buffer[CODEWORD_SIZE_BYTES]     = (uint8_t)bch_status;

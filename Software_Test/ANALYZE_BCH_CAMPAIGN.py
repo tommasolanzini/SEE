@@ -49,7 +49,7 @@ import matplotlib.pyplot as plt
 
 # --- Configuration ----------------------------------------------------------
 OUTPUT_DIR = os.path.join(".", "Test_Output")
-ID_PREFIX  = "0f_10k"      # campaign id in the filename: Test_<date>_0f_10k_0<N>.csv
+ID_PREFIX  = "1f_10k"      # campaign id in the filename: Test_<date>_0f_10k_0<N>.csv
 N_MIN      = 1
 N_MAX      = 30
 FAIL       = "FAIL"        # bucket label for bch_status < 0 (uncorrectable)
