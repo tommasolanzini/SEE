@@ -18,11 +18,3 @@ Test_Output/*
 *.mp3
 __pycache__/*
 *.pyc
-build/
-dist/
-nbproject/private/
-nbproject/Makefile-*
-nbproject/Package-*
-*.o
-*.hex
-*.elf
