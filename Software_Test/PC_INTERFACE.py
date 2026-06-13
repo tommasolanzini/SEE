@@ -9,18 +9,18 @@ from datetime import datetime
 BAUD_RATE      = 9600   
 SEND_SIZE      = 512
 RESPONSE_SIZE  = 522   # 512 payload + 8 parity + 1 BCH status + 1 CRC status
-NUM_WORDS      = 1000
-OUTPUT_DIR     = os.path.join(".", "Test_Output")
+NUM_WORDS      = 10000
+OUTPUT_DIR     = os.path.join(".", "Test_Output_MCU")
 
 
 def save_results(rows,i):
-    """Write the collected per-word results to .\\Test_Output\\Test_DD_MM_YYYY_<ID>.csv"""
+    """Write the collected per-word results to .\\Test_Output_MCU\\Test_DD_MM_YYYY_<ID>.csv"""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     date_str = datetime.now().strftime("%d_%m_%Y")
-    raw_id   = input("Enter a test ID for the filename: ").strip()
-    # raw_id   = f"0f_10k_MCU_{i}"
+    # raw_id   = input("Enter a test ID for the filename: ").strip()
+    raw_id   = f"3f_10k_MCU_{i}"
     test_id  = "".join(c for c in raw_id if c.isalnum() or c in ("-", "_")) or "run"
-    path     = os.path.join(OUTPUT_DIR, f"TM_{date_str}_{test_id}.csv")
+    path     = os.path.join(OUTPUT_DIR, f"Test_{date_str}_{test_id}.csv")
 
     with open(path, "w", newline="") as f:
         w = csv.writer(f)
@@ -38,7 +38,7 @@ def main():
     COM_number = input("Insert Communication port number: ")
     COM_PORT = fr'\\.\COM{COM_number}'
     print(f"Opening {COM_PORT} at {BAUD_RATE} baud...")
-    for j in range(1,2):
+    for j in range(1,31):
         rows = []
         try:
             with serial.Serial(COM_PORT, BAUD_RATE, timeout=2.0, write_timeout=2.0) as ser:
@@ -135,11 +135,11 @@ def main():
         # sound_path = os.path.abspath('Dolci_Peccati.mp3')
         # playsound(sound_path)
         if rows:
-            answer = input("\nSave results to CSV? (y/n): ").strip().lower()
-            if answer in ("y", "yes"):
-                save_results(rows, j)
-            else:
-                print("Results not saved.")
+            # answer = input("\nSave results to CSV? (y/n): ").strip().lower()
+            # if answer in ("y", "yes"):
+            save_results(rows, j)
+            # else:
+            #     print("Results not saved.")
 
 
 if __name__ == '__main__':

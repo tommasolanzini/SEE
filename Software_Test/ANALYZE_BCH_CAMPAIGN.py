@@ -50,7 +50,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --- Configuration ----------------------------------------------------------
-OUTPUT_DIR     = os.path.join(".", "Test_Output")
+OUTPUT_DIR     = os.path.join(".", "Software_Test\Test_Output_MCU")
 INJECTED_FLIPS = [0, 1, 2, 3]          # campaigns to analyse
 ID_TEMPLATE    = "{n}f_10k_MCU"        # filename id: Test_<date>_<id>_<N>.csv
 N_MIN          = 1

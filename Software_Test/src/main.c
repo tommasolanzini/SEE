@@ -14,7 +14,7 @@ extern APP_DATA appData;
 #define PARITY_SIZE_BYTES 8      // BCH + CRC
 #define CODEWORD_SIZE_BYTES (PAYLOAD_SIZE_BYTES + PARITY_SIZE_BYTES) // 520 bytes total
 
-volatile uint8_t TARGET_BIT_FLIPS = 0; 
+volatile uint8_t TARGET_BIT_FLIPS = 0;
 
 // --- Function prototypes to avoid implicit declarations ---
 void NAND_WriteByte(uint8_t data);
