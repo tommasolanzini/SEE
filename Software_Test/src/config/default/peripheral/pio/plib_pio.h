@@ -90,6 +90,7 @@
 #define SEL_F3_PIN                  PIO_PIN_PB0
 
 /*** Macros for AMP_OUT3 pin ***/
+#define AMP_OUT3_InputEnable()       (PIOA_REGS->PIO_ODR = ((uint32_t)1U<<20U))
 #define AMP_OUT3_Get()               ((PIOA_REGS->PIO_PDSR >> 20U) & 0x1U)
 #define AMP_OUT3_PIN                  PIO_PIN_PA20
 

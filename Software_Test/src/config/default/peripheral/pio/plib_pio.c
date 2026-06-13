@@ -75,7 +75,7 @@ void PIO_Initialize ( void )
     /* Initialize PORTA pin state */
     ((pio_registers_t*)PIO_PORT_A)->PIO_ODSR = 0x8000c00U;
     /* PORTA drive control */
-    ((pio_registers_t*)PIO_PORT_A)->PIO_DRIVER = 0x0U;
+    ((pio_registers_t*)PIO_PORT_A)->PIO_DRIVER = 0x10000U;
 
     /************************ PIO B Initialization ************************/
     ((pio_registers_t*)PIO_PORT_B)->PIO_PER = 0xFFFFFFFFU;
@@ -92,7 +92,7 @@ void PIO_Initialize ( void )
     /* Initialize PORTB pin state */
     ((pio_registers_t*)PIO_PORT_B)->PIO_ODSR = 0x0U;
     /* PORTB drive control */
-    ((pio_registers_t*)PIO_PORT_B)->PIO_DRIVER = 0x0U;
+    ((pio_registers_t*)PIO_PORT_B)->PIO_DRIVER = 0x1U;
 
     /************************ PIO C Initialization ************************/
     ((pio_registers_t*)PIO_PORT_C)->PIO_PER = 0xFFFFFFFFU;

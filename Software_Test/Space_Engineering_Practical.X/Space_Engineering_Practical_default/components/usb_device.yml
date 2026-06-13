@@ -1,17 +1,21 @@
 configVersion: 1.0.0
-componentName: usb_device
+componentName: tc1
 coreVersion: 5.8.4
 device: ATSAMV71Q21B
 library: []
 dependency:
 - dependencyPackage: class com.microchip.mcc.harmony.HarmonyModule
-  name: usb_device
+  name: tc1
   type: module
   version: ''
 - dependencyPackage: ''
-  name: usb
+  name: csp
   type: package
+<<<<<<<< HEAD:Software_Test/Space_Engineering_Practical.X/Space_Engineering_Practical_default/components/usb_device.yml
   version: v3.16.0
+========
+  version: v3.25.2
+>>>>>>>> latch-up-test:Latch_Up_Test/Space_Engineering_Practical.X/Space_Engineering_Practical_default/components/tc1.yml
 customDataClassName: com.microchip.utils_mh3.utils.persistence.CustomModuleData
 data:
   attachments: {}
@@ -21,13 +25,20 @@ data:
     children:
     - children:
       - attributes:
+<<<<<<<< HEAD:Software_Test/Space_Engineering_Practical.X/Space_Engineering_Practical_default/components/usb_device.yml
           id: usb_device
           x: '211'
           y: '9'
+========
+          id: tc1
+          x: '406'
+          y: '225'
+>>>>>>>> latch-up-test:Latch_Up_Test/Space_Engineering_Practical.X/Space_Engineering_Practical_default/components/tc1.yml
         type: ElementPosition
       type: ElementPositions
     type: ComponentGraph
   symbols:
+<<<<<<<< HEAD:Software_Test/Space_Engineering_Practical.X/Space_Engineering_Practical_default/components/usb_device.yml
     CONFIG_USB_DEVICE_DESCRIPTOR_IAD_ENABLE:
       attributes:
         id: CONFIG_USB_DEVICE_DESCRIPTOR_IAD_ENABLE
@@ -170,6 +181,162 @@ data:
       - children:
         - attributes:
             value: cdc_com_port_dual_demo
+========
+    ENCODER_POS_GET_API:
+      attributes:
+        id: ENCODER_POS_GET_API
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: TC1_QuadraturePositionGet
+          type: Dynamic
+        type: Values
+      type: String
+    ENCODER_POS_SET_API:
+      attributes:
+        id: ENCODER_POS_SET_API
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: ''
+          type: Dynamic
+        type: Values
+      type: String
+    ENCODER_SPEED_GET_API:
+      attributes:
+        id: ENCODER_SPEED_GET_API
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: ''
+          type: Dynamic
+        type: Values
+      type: String
+    ENCODER_SPEED_SET_API:
+      attributes:
+        id: ENCODER_SPEED_SET_API
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: ''
+          type: Dynamic
+        type: Values
+      type: String
+    ENCODER_START_API:
+      attributes:
+        id: ENCODER_START_API
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: TC1_QuadratureStart
+          type: Dynamic
+        type: Values
+      type: String
+    ENCODER_STOP_API:
+      attributes:
+        id: ENCODER_STOP_API
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: TC1_QuadratureStop
+          type: Dynamic
+        type: Values
+      type: String
+    TC0_CLOCK_FREQ:
+      attributes:
+        id: TC0_CLOCK_FREQ
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: '18750000'
+          type: Dynamic
+        type: Values
+      type: Integer
+    TC0_CMR_TCCLKS:
+      attributes:
+        id: TC0_CMR_TCCLKS
+      children:
+      - children:
+        - attributes:
+            value: '2'
+          type: User
+        type: Values
+      type: KeyValueSet
+    TC0_ENABLE:
+      attributes:
+        id: TC0_ENABLE
+      children:
+      - children:
+        - attributes:
+            value: 'true'
+          type: User
+        type: Values
+      type: Boolean
+    TC0_IER_CPCS:
+      attributes:
+        id: TC0_IER_CPCS
+      children:
+      - children:
+        - attributes:
+            value: 'false'
+          type: User
+        type: Values
+      type: Boolean
+    TC0_PCK7:
+      attributes:
+        id: TC0_PCK7
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: 'false'
+          type: Dynamic
+        type: Values
+      type: Boolean
+    TC0_TIMER_PERIOD_COUNT:
+      attributes:
+        id: TC0_TIMER_PERIOD_COUNT
+      children:
+      - children:
+        - attributes:
+            id: tc1
+            value: '56250'
+          type: Dynamic
+        type: Values
+      type: Long
+    TC0_TIMER_PERIOD_MS:
+      attributes:
+        id: TC0_TIMER_PERIOD_MS
+      children:
+      - children:
+        - attributes:
+            id: max
+          children:
+          - type: Value
+            value: '3495.2534'
+          type: Float
+        type: Attributes
+      - children:
+        - attributes:
+            value: '3000.0'
+          type: User
+        type: Values
+      type: Float
+    TC0_TIMER_UNIT:
+      attributes:
+        id: TC0_TIMER_UNIT
+      children:
+      - children:
+        - attributes:
+            value: microsecond
+>>>>>>>> latch-up-test:Latch_Up_Test/Space_Engineering_Practical.X/Space_Engineering_Practical_default/components/tc1.yml
           type: User
         type: Values
       type: Combo
