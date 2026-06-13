@@ -16,4 +16,5 @@ nbproject/private/
 mcc-manifest-autosave.yml
 .vscode/
 Test_Output/*
+Test_Output_MCU/*
 *.mp3
