@@ -50,7 +50,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 # --- Configuration ----------------------------------------------------------
-OUTPUT_DIR     = os.path.join(".", "Test_Output")
+OUTPUT_DIR     = os.path.join(".", "Software_Test\Test_Output_MCU")
 INJECTED_FLIPS = [0, 1, 2, 3]          # campaigns to analyse
 ID_TEMPLATE    = "{n}f_10k_MCU"        # filename id: Test_<date>_<id>_<N>.csv
 N_MIN          = 1
@@ -328,13 +328,13 @@ def overview_plot(results):
     fig.suptitle("BCH logic vs number of injected bit-flips (no flash in loop)",
                  fontsize=12)
 
-    # Panel 1: end-to-end payload-intact rate vs injected flips
+    # Panel 1: end-to-end payload-intact rate vs injected flips (LINEAR SCALE)
     ax1.errorbar(ns, [r["ok_mean"] for r in results],
                  yerr=[r["ok_std"] for r in results],
                  marker="o", capsize=4, color="#2E8B57", linewidth=1.8)
     ax1.set_xticks(ns)
-    ax1.set_ylim(-0.05, 1.05)
-    ax1.set_xlabel("Injected bit-flips per word")
+    ax1.set_ylim(-0.05, 1.05) 
+    ax1.set_xlabel("Artificially injected bit-flips per word")
     ax1.set_ylabel("Payload intact after decode [-]")
     ax1.set_title("End-to-end success rate")
     ax1.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
@@ -343,24 +343,44 @@ def overview_plot(results):
                      va="bottom", fontsize=8, xytext=(0, 5),
                      textcoords="offset points")
 
-    # Panel 2: decoder verdict mix per campaign (grouped bars)
+    # Panel 2: decoder verdict mix per campaign (grouped bars) (LOG SCALE)
     all_buckets = sorted({b for r in results for b in r["buckets"]},
                          key=bucket_sort_key)
     width  = 0.8 / len(all_buckets)
     colors = plt.cm.viridis(np.linspace(0.15, 0.85, len(all_buckets)))
+    
     for j, b in enumerate(all_buckets):
-        vals = [r["stats"].get(b, {}).get("frac_mean", 0.0) or 0.0 for r in results]
-        errs = [r["stats"].get(b, {}).get("frac_std", 0.0) or 0.0 for r in results]
+        raw_vals = [r["stats"].get(b, {}).get("frac_mean", 0.0) or 0.0 for r in results]
+        raw_errs = [r["stats"].get(b, {}).get("frac_std", 0.0) or 0.0 for r in results]
+        
+        # Replace 0 values with NaN to declutter the 1e-4 baseline
+        vals = [v if v > 0 else np.nan for v in raw_vals]
+        errs = [e if v > 0 else np.nan for v, e in zip(raw_vals, raw_errs)]
+        
         pos  = [n + (j - (len(all_buckets) - 1) / 2) * width for n in ns]
         lbl  = f"reported {b}" if b != FAIL else "FAIL (>=3)"
+        
         ax2.bar(pos, vals, width=width, yerr=errs, capsize=2,
-                color=colors[j], label=lbl)
+                color=colors[j], label=lbl, log=True, bottom=1e-4)
+
     ax2.set_xticks(ns)
-    ax2.set_xlabel("Injected bit-flips per word")
+    ax2.set_yscale("log")
+    ax2.set_ylim(bottom=1e-4, top=3.0) 
+    
+    # Emphasize the X-axis meaning
+    ax2.set_xlabel("Artificially injected bit-flips (Macro-category)")
     ax2.set_ylabel("Fraction of words [-]")
     ax2.set_title("Decoder verdict mix")
-    ax2.grid(True, axis="y", linestyle="--", linewidth=0.5, alpha=0.6)
-    ax2.legend(fontsize=8)
+    
+    # Add vertical separator lines between the macro-categories
+    for i in range(len(ns) - 1):
+        mid_point = (ns[i] + ns[i+1]) / 2.0
+        ax2.axvline(x=mid_point, color='gray', linestyle=':', linewidth=1.0, alpha=0.7)
+
+    ax2.grid(True, which="both", axis="y", linestyle="--", linewidth=0.5, alpha=0.6)
+    
+    # Add a title to the legend to clarify what the sub-categories are
+    ax2.legend(title="BCH Decoder Verdict", fontsize=8, title_fontsize=9, loc="lower left")
 
     fig.tight_layout()
     fig.savefig(png, dpi=150)
