@@ -69,43 +69,7 @@ undetected miscorrection to ~7×10⁻¹², satisfying requirement MMS.05.03.
 | LUP circuit | LT6118 + IRLML6346 + FDC638P | unchanged |
 
 The MLC surrogate exhibits a high intrinsic Raw Bit Error Rate (RBER), which
-motivated excluding the NAND from the software test loop (see dry-run results).
-
----
-
-## Quick start
-
-### Software Test
-
-**Requirements:** Python ≥ 3.9, MPLAB X v6.30, XC32 compiler, J-Link or
-PICkit 4 debugger.
-
-1. Open `Software_Test/Space_Engineering_Practical.X` in MPLAB X.
-2. Flash the firmware to the MCU via the debugger.
-3. Connect the MCU to the host via USB-B and identify the COM port.
-4. Run the host script:
-```bash
-   cd Software_Test
-   python PC_INTERFACE.py
-   # Follow the prompt to enter the COM port number.
-```
-5. Results are logged to `Software_Test/Test_Output/`.
-
-### Latch-Up Test
-
-See `Latch_Up_Test/README.md` for setup and procedure.
-
----
-
-## Dry-run findings <a name="dry-run"></a>
-
-Baseline runs with no fault injection revealed that the MCU–NAND interface
-corrupts a substantial fraction of words independently of deliberate injection
-(~44% of words show ≥1 bit flip). The required ECC strength for the Micron
-device is t=40 per 1024 B, far beyond the t=2 scheme under test. The NAND was
-therefore removed from the software test loop: codewords are encoded, corrupted,
-and decoded entirely within MCU SRAM, leaving the injected weight *N* as the
-sole fault source.
+motivated excluding the NAND from the software test loop.
 
 ---
 
