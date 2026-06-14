@@ -10,7 +10,7 @@ spenvis_rate = 6e-12            # errors per bit per second
 
 #  Parameters
 scrubbing_frequency = 5         # days
-memory_fraction = 0.01
+memory_fraction = 0.005
 total_memory *= memory_fraction  # Use only a fraction of the total memory for the simulation
 
 num_words = int(total_memory / word_size)
@@ -22,7 +22,7 @@ errors = np.zeros(num_words)
 errors_nombu = np.zeros(num_words)
 
 batch_size = 10_000
-runs = 100
+runs = 112
 write = True
 cycles = trange(runs, desc="Simulating runs")
 for run in cycles:
