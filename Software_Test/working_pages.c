@@ -50,9 +50,9 @@ extern APP_DATA appData;
 #define BUSY_TIMEOUT_LOOPS    300000u
 #define READY_TIMEOUT_LOOPS   8000000u
 
-// =============================================================================
+
 // 1. BIT-BANGING ENGINES
-// =============================================================================
+
 
 void NAND_WriteByte(uint8_t data) {
     PIOD_REGS->PIO_OER = (1UL << 25) | (1UL << 26) | (1UL << 24) | (1UL << 23);
@@ -114,9 +114,9 @@ uint8_t NAND_ReadByte(void) {
     return data;
 }
 
-// =============================================================================
+
 // 2. ONFI HELPERS
-// =============================================================================
+
 
 void NAND_Command(uint8_t cmd) {
     NAND_CLE_Set(); NAND_ALE_Clear(); NAND_WriteByte(cmd); NAND_CLE_Clear();
@@ -125,9 +125,9 @@ void NAND_Address(uint8_t addr) {
     NAND_CLE_Clear(); NAND_ALE_Set(); NAND_WriteByte(addr); NAND_ALE_Clear();
 }
 
-// =============================================================================
+
 // 3. NAND DRIVERS (edge-aware ready)
-// =============================================================================
+
 
 void HW_NAND_Wait_Ready(void) {
     for (volatile uint32_t d = 0; d < T_TWB_LOOPS; d++) { asm("nop"); }
@@ -184,9 +184,9 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     CE_F3_Set();
 }
 
-// =============================================================================
+
 // 4. BUFFERS + PATTERN
-// =============================================================================
+
 
 uint8_t CACHE_ALIGN known_codeword[CODEWORD_SIZE_BYTES];
 uint8_t CACHE_ALIGN flash_read_buffer[CODEWORD_SIZE_BYTES];
@@ -204,9 +204,9 @@ static void build_known_pattern(uint32_t page) {
             (uint8_t)(0xC3u ^ (k * 0x55u) ^ (uint8_t)page);
 }
 
-// =============================================================================
+
 // 5. MAIN
-// =============================================================================
+
 
 int main(void) {
     SYS_Initialize(NULL);
