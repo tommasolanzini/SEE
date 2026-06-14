@@ -6,7 +6,6 @@ deviceLibrary: {}
 groupModules: []
 modules:
 - HarmonyCore
-- afec0
 - cmsis
 - core
 - dfp
@@ -14,7 +13,6 @@ modules:
 - efc
 - sys_time
 - tc0
-- tc1
 - usb_device
 - usb_device_cdc
 - usb_device_cdc_0

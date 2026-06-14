@@ -337,11 +337,11 @@ def overview_plot(results):
     ax1.set_xlabel("Artificially injected bit-flips per word")
     ax1.set_ylabel("Payload intact after decode [-]")
     ax1.set_title("End-to-end success rate")
-    ax1.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
-    for n, r in zip(ns, results):
-        ax1.annotate(f"{r['ok_mean']:.2%}", (n, r["ok_mean"]), ha="center",
-                     va="bottom", fontsize=8, xytext=(0, 5),
-                     textcoords="offset points")
+    ax1.grid(True, linestyle="--", linewidth=0.5, alpha=0.3)
+    # for n, r in zip(ns, results):
+    #     ax1.annotate(f"{r['ok_mean']:.2%}", (n, r["ok_mean"]), ha="center",
+    #                  va="bottom", fontsize=8, xytext=(0, -20),
+    #                  textcoords="offset points")
 
     # Panel 2: decoder verdict mix per campaign (grouped bars) (LOG SCALE)
     all_buckets = sorted({b for r in results for b in r["buckets"]},
@@ -377,7 +377,7 @@ def overview_plot(results):
         mid_point = (ns[i] + ns[i+1]) / 2.0
         ax2.axvline(x=mid_point, color='gray', linestyle=':', linewidth=1.0, alpha=0.7)
 
-    ax2.grid(True, which="both", axis="y", linestyle="--", linewidth=0.5, alpha=0.6)
+    ax2.grid(True, which="both", axis="y", linestyle="--", linewidth=0.5, alpha=0.3)
     
     # Add a title to the legend to clarify what the sub-categories are
     ax2.legend(title="BCH Decoder Verdict", fontsize=8, title_fontsize=9, loc="lower left")

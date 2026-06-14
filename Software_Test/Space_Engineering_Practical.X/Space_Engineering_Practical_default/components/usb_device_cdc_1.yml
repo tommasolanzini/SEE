@@ -24,7 +24,7 @@ data:
       - children:
         - attributes:
             id: usb_device_cdc_1
-            value: '6'
+            value: '3'
           type: Dynamic
         type: Values
       type: Integer
@@ -35,7 +35,7 @@ data:
       - children:
         - attributes:
             id: usb_device_cdc_1
-            value: '5'
+            value: '2'
           type: Dynamic
         type: Values
       type: Integer
@@ -46,7 +46,7 @@ data:
       - children:
         - attributes:
             id: usb_device_cdc_1
-            value: '2'
+            value: '0'
           type: Dynamic
         type: Values
       type: Integer
@@ -57,7 +57,7 @@ data:
       - children:
         - attributes:
             id: usb_device_cdc_1
-            value: '4'
+            value: '1'
           type: Dynamic
         type: Values
       type: Integer
