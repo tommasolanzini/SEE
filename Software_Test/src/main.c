@@ -28,9 +28,9 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
 void inject_errors(uint8_t* codeword, uint32_t byte_length, uint8_t num_flips);
 /* gf2_extract_payload is declared in gf2_poly.h (C linkage). */
 
-// =============================================================================
+
 // 1. BIT-BANGING ENGINES (OPTIMIZED DIRECT REGISTER ACCESS)
-// =============================================================================
+
 
 void NAND_WriteByte(uint8_t data) {
     /* 1. Force pins to OUTPUT mode, bypassing Harmony abstractions */
@@ -101,9 +101,9 @@ uint8_t NAND_ReadByte(void) {
     return data;
 }
 
-// =============================================================================
+
 // 2. ONFI PROTOCOL HELPERS
-// =============================================================================
+
 
 void NAND_Command(uint8_t cmd) {
     NAND_CLE_Set();    
@@ -119,9 +119,9 @@ void NAND_Address(uint8_t addr) {
     NAND_ALE_Clear();  
 }
 
-// =============================================================================
+
 // 3. HARDWARE NAND DRIVERS 
-// =============================================================================
+
 
 void HW_NAND_Wait_Ready(bool restore_read_mode) {
     /* 1. tWB Delay: Wait to allow the NAND to enter BUSY state */
@@ -221,9 +221,9 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     CE_F3_Set();
 }
 
-// =============================================================================
+
 // 4. MAIN ENTRY POINT & CUSTOM STATE MACHINE
-// =============================================================================
+
 
 uint8_t CACHE_ALIGN rx_buffer[PAYLOAD_SIZE_BYTES];
 uint8_t CACHE_ALIGN tx_buffer[CODEWORD_SIZE_BYTES + 2]; 

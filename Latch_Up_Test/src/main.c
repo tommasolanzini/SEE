@@ -16,9 +16,9 @@ extern APP_DATA appData;
 
 volatile uint8_t TARGET_BIT_FLIPS = 0; 
 
-// =============================================================================
+
 // 1. BIT-BANGING ENGINES (OPTIMIZED DIRECT REGISTER ACCESS)
-// =============================================================================
+
 
 void NAND_WriteByte(uint8_t data) {
     /* 1. Force pins to OUTPUT mode bypassing Harmony abstractions */
@@ -89,9 +89,9 @@ uint8_t NAND_ReadByte(void) {
     return data;
 }
 
-// =============================================================================
+
 // 2. ONFI PROTOCOL HELPERS
-// =============================================================================
+
 
 void NAND_Command(uint8_t cmd) {
     NAND_CLE_Set();    
@@ -107,9 +107,9 @@ void NAND_Address(uint8_t addr) {
     NAND_ALE_Clear();  
 }
 
-// =============================================================================
+
 // 3. HARDWARE NAND DRIVERS 
-// =============================================================================
+
 
 void HW_NAND_Wait_Ready(void) {
     /* 1. tWB Delay: Wait ~2 microseconds for NAND to pull R/B# LOW */
@@ -198,9 +198,9 @@ void HW_NAND_Read_Codeword(uint32_t page_address, uint8_t* payload, uint8_t* par
     CE_F3_Set();
 }
 
-// =============================================================================
+
 // 4. MAIN ENTRY POINT & CUSTOM STATE MACHINE
-// =============================================================================
+
 
 uint8_t CACHE_ALIGN rx_buffer[PAYLOAD_SIZE_BYTES];
 uint8_t CACHE_ALIGN tx_buffer[CODEWORD_SIZE_BYTES + 2]; 

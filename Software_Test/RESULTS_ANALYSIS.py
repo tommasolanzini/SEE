@@ -1,43 +1,10 @@
-"""
-ANALYZE_BCH_CAMPAIGN.py
-
-Analyzes the MCU-only EDAC campaigns (flash memory EXCLUDED from the loop:
-PC -> MCU encode -> inject n bit-flips -> MCU decode -> PC). One campaign per
-injected-flip count, files written by PC_INTERFACE.save_results as
-
-    Test_<DD_MM_YYYY>_<n>f_10k_MCU_<N>.csv     n = 0..3 ,  N = 1..30
-
-(each row: word_index, bch_status, crc, payload_match, diff_bytes,
- sent_word_hex, corrected_word_hex)
-
-For EVERY injected-flip count n the script produces the same analysis as the
-previous campaign version:
-
-1.  FLIP DISTRIBUTION -- fraction of words for which the decoder reported
-    0, 1, 2 corrections or gave up (`bch_status < 0` -> bucket "FAIL").
-    Since exactly n flips are injected per word, this distribution directly
-    shows how the decoder CLASSIFIES an n-flip word (with n <= 2 it should
-    sit ~100% in bucket n; with n = 3 it should mostly FAIL, and anything
-    landing in buckets 0..2 is a mis-decode).
-
-2.  BCH SUCCESS RATE PER BUCKET -- within each bucket, the fraction of words
-    whose payload came back bit-identical to what was sent
-    (`payload_match == OK`). Success is judged on sent-vs-received, NOT on
-    the decoder's own claim, so miscorrections are counted as failures.
-    "Silent corruptions" = decoder claimed success (bch_status >= 0) but the
-    payload is wrong.
-
-3.  TEST-TO-TEST STATISTICS -- per-test fractions / success rates summarised
-    across the N runs as mean +/- sample std (ddof=1), plus pooled values.
-
-Outputs (in .\\Test_Output\\), per campaign n:
-    * bch_mcu_<n>f_per_test.csv    one row per test
-    * bch_mcu_<n>f_summary.csv     one row per bucket
-    * bch_mcu_<n>f_plot.png        two panels: distribution + success rate
-plus a cross-campaign overview:
-    * bch_mcu_overview.png         payload-intact rate & decoder verdicts
-                                   as a function of the injected flips
-"""
+# Outputs (in .\\Test_Output_MCU\\), per campaign n:
+#     * bch_mcu_<n>f_per_test.csv    one row per test
+#     * bch_mcu_<n>f_summary.csv     one row per bucket
+#     * bch_mcu_<n>f_plot.png        two panels: distribution + success rate
+# plus a cross-campaign overview:
+#     * bch_mcu_overview.png         payload-intact rate & decoder verdicts
+#                                    as a function of the injected flips
 
 import os
 import re
@@ -49,8 +16,7 @@ from collections import defaultdict
 import numpy as np
 import matplotlib.pyplot as plt
 
-# --- Configuration ----------------------------------------------------------
-OUTPUT_DIR     = os.path.join(".", "Software_Test\Test_Output_MCU")
+OUTPUT_DIR     = os.path.join(".", "Software_Test", "Test_Output_MCU")
 INJECTED_FLIPS = [0, 1, 2, 3]          # campaigns to analyse
 ID_TEMPLATE    = "{n}f_10k_MCU"        # filename id: Test_<date>_<id>_<N>.csv
 N_MIN          = 1
@@ -72,8 +38,7 @@ def residual_bit_flips(sent_hex, recv_hex):
 
 
 def collect_run_files(id_prefix):
-    """Map run number N -> csv path for Test_*_<id_prefix>_<N>.csv.
-    int() absorbs any leading zero in N ('01' -> 1, '030' -> 30)."""
+    """Map run number N -> csv path for Test_*_<id_prefix>_<N>.csv."""
     rx = re.compile(rf"_{re.escape(id_prefix)}_(\d+)\.csv$", re.IGNORECASE)
     found = defaultdict(list)
     for path in sorted(glob.glob(os.path.join(OUTPUT_DIR, f"Test_*_{id_prefix}_*.csv"))):
@@ -92,11 +57,12 @@ def collect_run_files(id_prefix):
 
 def analyze_run(path):
     """Per-test tallies: counts/matches per decoder bucket + side stats."""
-    counts   = defaultdict(int)   # bucket -> words in bucket
-    matches  = defaultdict(int)   # bucket -> words with payload OK
-    crc_ok_n = defaultdict(int)   # bucket -> words with CRC OK
-    silent   = 0                  # decoder claimed success but payload wrong
-    resid    = []                 # residual flipped bits on mismatched words
+    counts   = defaultdict(int)   
+    matches  = defaultdict(int)   
+    crc_ok_n = defaultdict(int)   
+    silent_bch = 0                # BCH claimed success, payload wrong
+    silent_crc = 0                # BCH & CRC claimed success, payload wrong
+    resid    = []                 
     total    = 0
 
     with open(path, newline="") as f:
@@ -116,16 +82,19 @@ def analyze_run(path):
                 matches[bucket] += 1
             if crc:
                 crc_ok_n[bucket] += 1
+                
             if not ok:
                 if bch >= 0:
-                    silent += 1
+                    silent_bch += 1
+                    if crc:
+                        silent_crc += 1 # False Positive escaped both ECC and CRC!
                 nf = residual_bit_flips(r.get("sent_word_hex", ""),
                                         r.get("corrected_word_hex", ""))
                 if nf is not None:
                     resid.append(nf)
 
     return {"total": total, "counts": counts, "matches": matches,
-            "crc_ok": crc_ok_n, "silent": silent, "resid": resid}
+            "crc_ok": crc_ok_n, "silent_bch": silent_bch, "silent_crc": silent_crc, "resid": resid}
 
 
 def bucket_sort_key(b):
@@ -147,8 +116,7 @@ def mstd(values):
 
 
 def process_campaign(n_inj):
-    """Full analysis of the <n_inj>f campaign. Returns a dict for the
-    cross-campaign overview, or None when no files were found."""
+    """Full analysis of the <n_inj>f campaign."""
     id_prefix = ID_TEMPLATE.format(n=n_inj)
     per_test_csv = os.path.join(OUTPUT_DIR, f"bch_mcu_{n_inj}f_per_test.csv")
     summary_csv  = os.path.join(OUTPUT_DIR, f"bch_mcu_{n_inj}f_summary.csv")
@@ -168,8 +136,7 @@ def process_campaign(n_inj):
             missing.append(n)
             continue
         per_run[n] = analyze_run(path)
-        print(f"  run {n:<3}: {per_run[n]['total']:>6} words   "
-              f"({os.path.basename(path)})")
+        
     if missing:
         print(f"  missing runs (skipped): {missing}")
     if not per_run:
@@ -179,10 +146,10 @@ def process_campaign(n_inj):
                      key=bucket_sort_key)
     run_ids = sorted(per_run)
 
-    # --- Per-test fractions and success rates (NaN when bucket absent) ------
+    # Per-test fractions and success rates
     frac = {b: [] for b in buckets}
     succ = {b: [] for b in buckets}
-    word_ok = []                       # overall payload-intact rate per test
+    word_ok = []                       
     for n in run_ids:
         s = per_run[n]
         for b in buckets:
@@ -192,12 +159,13 @@ def process_campaign(n_inj):
         word_ok.append(sum(s["matches"].values()) / s["total"]
                        if s["total"] else float("nan"))
 
-    # --- Pooled ---------------------------------------------------------------
+    #  Pooled 
     pool_total   = sum(s["total"] for s in per_run.values())
     pool_counts  = {b: sum(s["counts"].get(b, 0)  for s in per_run.values()) for b in buckets}
     pool_matches = {b: sum(s["matches"].get(b, 0) for s in per_run.values()) for b in buckets}
     pool_crc     = {b: sum(s["crc_ok"].get(b, 0)  for s in per_run.values()) for b in buckets}
-    pool_silent  = sum(s["silent"] for s in per_run.values())
+    pool_silent_bch = sum(s["silent_bch"] for s in per_run.values())
+    pool_silent_crc = sum(s["silent_crc"] for s in per_run.values())
     pool_resid   = [x for s in per_run.values() for x in s["resid"]]
 
     stats = {}
@@ -209,13 +177,13 @@ def process_campaign(n_inj):
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # --- per-test CSV ----------------------------------------------------------
+    #  per-test CSV -
     with open(per_test_csv, "w", newline="") as f:
         w = csv.writer(f)
         hdr = ["run", "words"]
         for b in buckets:
             hdr += [f"n_{b}", f"frac_{b}", f"bch_success_{b}"]
-        hdr += ["payload_ok_rate", "silent_corruptions"]
+        hdr += ["payload_ok_rate", "silent_bch", "silent_crc"]
         w.writerow(hdr)
         for i, n in enumerate(run_ids):
             s   = per_run[n]
@@ -226,10 +194,10 @@ def process_campaign(n_inj):
                 row += [c,
                         f"{fr:.8f}" if not math.isnan(fr) else "",
                         f"{sr:.8f}" if not math.isnan(sr) else ""]
-            row += [f"{word_ok[i]:.8f}", s["silent"]]
+            row += [f"{word_ok[i]:.8f}", s["silent_bch"], s["silent_crc"]]
             w.writerow(row)
 
-    # --- summary CSV -------------------------------------------------------------
+    #  summary CSV -
     with open(summary_csv, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(["bucket", "pooled_words", "pooled_fraction",
@@ -246,38 +214,40 @@ def process_campaign(n_inj):
                         f"{st['succ_std']:.8f}"  if not math.isnan(st["succ_std"])  else "",
                         f"{pool_crc[b] / c:.8f}" if c else ""])
 
-    # --- console summary -----------------------------------------------------------
+    #  console summary 
     ok_m, ok_s = mstd(word_ok)
     print(f"\n  Wrote {per_test_csv}")
     print(f"  Wrote {summary_csv}")
-    print("\n  " + "=" * 72)
+    print("\n  " + "=" * 90)
     print(f"    {n_inj} INJECTED FLIP(S)  --  {len(run_ids)} tests, {pool_total} words")
-    print("  " + "=" * 72)
+    print("  " + "=" * 90)
     print(f"  {'decoder':>8} | {'words':>8} | {'fraction (mean+/-std)':>24} | "
-          f"{'BCH success (mean+/-std)':>26}")
-    print("  " + "-" * 72)
+          f"{'BCH success (mean+/-std)':>26} | {'CRC Valid Rate':>14}")
+    print("  " + "-" * 90)
     for b in buckets:
         st = stats[b]
         lbl = str(b) if b != FAIL else ">=3/FAIL"
         f_str = f"{fmt_pct(st['frac_mean'])} +/- {st['frac_std']:6.2%}"
         s_str = (f"{fmt_pct(st['succ_mean'])} +/- {st['succ_std']:6.2%}"
                  if not math.isnan(st["succ_mean"]) else "      --")
-        print(f"  {lbl:>8} | {pool_counts[b]:>8} | {f_str:>24} | {s_str:>26}")
-    print("  " + "-" * 72)
-    print(f"  Payload intact overall: {ok_m:.4%} +/- {ok_s:.4%}")
-    print(f"  Silent corruptions (decoder OK, payload wrong): {pool_silent}")
+        c_str = f"{fmt_pct(pool_crc[b]/pool_counts[b])}" if pool_counts[b] else "    --"
+        print(f"  {lbl:>8} | {pool_counts[b]:>8} | {f_str:>24} | {s_str:>26} | {c_str:>14}")
+    print("  " + "-" * 90)
+    print(f"  Payload intact overall: {ok_m:.4%} +/- {ok_s:.4%}  (Target: >= 99.73%)")
+    print(f"  ECC Silent Corruptions (BCH OK, Payload Wrong): {pool_silent_bch}")
+    print(f"  CRITICAL False Positives (CRC OK, Payload Wrong): {pool_silent_crc}  (Target: 0)")
     if pool_resid:
         print(f"  Residual flipped bits on mismatched words: "
               f"mean {np.mean(pool_resid):.1f}, max {max(pool_resid)}")
-    print("  " + "=" * 72)
+    print("  " + "=" * 90)
 
-    # --- per-campaign figure (same two panels as before) -----------------------------
     x      = np.arange(len(buckets))
     labels = [str(b) if b != FAIL else ">=3\n(FAIL)" for b in buckets]
     fmeans = [stats[b]["frac_mean"] for b in buckets]
     fstds  = [stats[b]["frac_std"]  for b in buckets]
     smeans = [stats[b]["succ_mean"] for b in buckets]
     sstds  = [stats[b]["succ_std"]  for b in buckets]
+    cmeans = [pool_crc[b]/pool_counts[b] if pool_counts[b] else 0.0 for b in buckets]
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 4.5))
     fig.suptitle(f"BCH logic only (no flash) -- {n_inj} injected flip(s), "
@@ -315,8 +285,9 @@ def process_campaign(n_inj):
     print(f"  Saved plot -> {plot_png}")
 
     return {"n_inj": n_inj, "tests": len(run_ids), "total": pool_total,
-            "buckets": buckets, "stats": stats,
-            "ok_mean": ok_m, "ok_std": ok_s, "silent": pool_silent}
+            "buckets": buckets, "stats": stats, "crc_means": cmeans,
+            "ok_mean": ok_m, "ok_std": ok_s, 
+            "silent_bch": pool_silent_bch, "silent_crc": pool_silent_crc}
 
 
 def overview_plot(results):
@@ -328,7 +299,6 @@ def overview_plot(results):
     fig.suptitle("BCH logic vs number of injected bit-flips (no flash in loop)",
                  fontsize=12)
 
-    # Panel 1: end-to-end payload-intact rate vs injected flips (LINEAR SCALE)
     ax1.errorbar(ns, [r["ok_mean"] for r in results],
                  yerr=[r["ok_std"] for r in results],
                  marker="o", capsize=4, color="#2E8B57", linewidth=1.8)
@@ -338,12 +308,7 @@ def overview_plot(results):
     ax1.set_ylabel("Payload intact after decode [-]")
     ax1.set_title("End-to-end success rate")
     ax1.grid(True, linestyle="--", linewidth=0.5, alpha=0.3)
-    # for n, r in zip(ns, results):
-    #     ax1.annotate(f"{r['ok_mean']:.2%}", (n, r["ok_mean"]), ha="center",
-    #                  va="bottom", fontsize=8, xytext=(0, -20),
-    #                  textcoords="offset points")
 
-    # Panel 2: decoder verdict mix per campaign (grouped bars) (LOG SCALE)
     all_buckets = sorted({b for r in results for b in r["buckets"]},
                          key=bucket_sort_key)
     width  = 0.8 / len(all_buckets)
@@ -352,8 +317,7 @@ def overview_plot(results):
     for j, b in enumerate(all_buckets):
         raw_vals = [r["stats"].get(b, {}).get("frac_mean", 0.0) or 0.0 for r in results]
         raw_errs = [r["stats"].get(b, {}).get("frac_std", 0.0) or 0.0 for r in results]
-        
-        # Replace 0 values with NaN to declutter the 1e-4 baseline
+
         vals = [v if v > 0 else np.nan for v in raw_vals]
         errs = [e if v > 0 else np.nan for v, e in zip(raw_vals, raw_errs)]
         
@@ -366,20 +330,16 @@ def overview_plot(results):
     ax2.set_xticks(ns)
     ax2.set_yscale("log")
     ax2.set_ylim(bottom=1e-4, top=3.0) 
-    
-    # Emphasize the X-axis meaning
     ax2.set_xlabel("Artificially injected bit-flips (Macro-category)")
     ax2.set_ylabel("Fraction of words [-]")
     ax2.set_title("Decoder verdict mix")
     
-    # Add vertical separator lines between the macro-categories
     for i in range(len(ns) - 1):
         mid_point = (ns[i] + ns[i+1]) / 2.0
         ax2.axvline(x=mid_point, color='gray', linestyle=':', linewidth=1.0, alpha=0.7)
 
     ax2.grid(True, which="both", axis="y", linestyle="--", linewidth=0.5, alpha=0.3)
     
-    # Add a title to the legend to clarify what the sub-categories are
     ax2.legend(title="BCH Decoder Verdict", fontsize=8, title_fontsize=9, loc="lower left")
 
     fig.tight_layout()
@@ -403,14 +363,13 @@ def main():
         return
 
     # Cross-campaign recap table
-    print("\n" + "=" * 60)
-    print("  CROSS-CAMPAIGN RECAP (payload intact, mean +/- std)")
-    print("=" * 60)
+    print("\n" + "=" * 85)
+    print("  CROSS-CAMPAIGN RECAP (Target: 3σ / 99.73% Data Match | 0 False Positives)")
+    print("=" * 85)
     for r in results:
-        print(f"  {r['n_inj']} flip(s): {r['ok_mean']:8.4%} +/- {r['ok_std']:7.4%}"
-              f"   ({r['tests']} tests, {r['total']} words, "
-              f"{r['silent']} silent)")
-    print("=" * 60)
+        print(f"  {r['n_inj']} flips: Match {r['ok_mean']:8.4%} +/- {r['ok_std']:7.4%} | "
+              f"ECC Silent: {r['silent_bch']:<5} | CRC False Positives: {r['silent_crc']:<5}")
+    print("=" * 85)
 
     if len(results) > 1:
         overview_plot(results)
